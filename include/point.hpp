@@ -41,13 +41,13 @@ Index PointContainer<Atom_>::num_atoms() const
 }
 
 template <class Atom_>
-const Atom_* PointContainer<Atom_>::point_mem(Index i) const
+const Atom_* PointContainer<Atom_>::mem(Index i) const
 {
     return &data[offsets[i]];
 }
 
 template <class Atom_>
-Index PointContainer<Atom_>::point_dim(Index i) const
+Index PointContainer<Atom_>::size(Index i) const
 {
     return offsets[i+1]-offsets[i];
 }
@@ -152,10 +152,12 @@ Index PointContainer<Atom_>::read_fvecs(const char *fname, MPI_Comm comm)
 
     MPI_Allgather(MPI_IN_PLACE, 1, MPI_INDEX, sizes.data(), 1, MPI_INDEX, comm);
 
-    IndexVector offsets(nprocs);
-    std::exclusive_scan(sizes.begin(), sizes.end(), offsets.begin(), (Index)0);
-    Index totsize = offsets.back() + sizes.back();
-    Index myoffset = offsets[myrank];
+    Index totsize;
+    Index myoffset;
+
+    MPI_Allreduce(&mysize, &totsize, 1, MPI_INDEX, MPI_SUM, comm);
+    MPI_Exscan(&mysize, &myoffset, 1, MPI_INDEX, MPI_SUM, comm);
+    if (!myrank) myoffset = 0;
 
     data.resize(mysize*dim);
     offsets.resize(mysize+1);

@@ -12,6 +12,7 @@
 
 #include "utils.h"
 #include "point.h"
+#include "search.h"
 
 MPI_Comm comm;
 int myrank, nprocs;
@@ -28,7 +29,7 @@ int verbosity = 1;
 template <class Atom>
 struct L2Distance
 {
-    Index dist_comps = 0;
+    Index distcomps = 0;
     Real operator()(const Atom* p, const Atom* q, Index m, Index n);
 };
 
@@ -60,6 +61,7 @@ int main_mpi(int argc, char *argv[])
     using PointContainerType = PointContainer<Atom>;
 
     double mytime, time;
+    Index mydistcomps, distcomps;
 
     Index size, mysize, myoffset;
     PointContainerType mypoints;
@@ -81,6 +83,23 @@ int main_mpi(int argc, char *argv[])
         fflush(stderr);
     }
 
+    mytime = -MPI_Wtime();
+    mydistcomps = distance.distcomps;
+
+    CoverTree tree(cover, leaf_size);
+    tree.build(mypoints, distance);
+
+    mytime += MPI_Wtime();
+    mydistcomps = distance.distcomps - mydistcomps;
+
+    if (verbosity >= 1)
+    {
+        MPI_Reduce(&mytime, &time, 1, MPI_DOUBLE, MPI_MAX, 0, comm);
+        MPI_Reduce(&mydistcomps, &distcomps, 1, MPI_INDEX, MPI_SUM, 0, comm);
+
+        if (!myrank) fprintf(stderr, "[time=%.3f] built cover trees [distcomps=%s,avg_distcomps=%s]\n", time, LARGE(distcomps), LARGE(static_cast<Index>((distcomps+0.0)/nprocs)));
+        fflush(stderr);
+    }
 
     /* ref
     double mytime, time;
@@ -283,7 +302,7 @@ Real L2Distance<Atom>::operator()(const Atom* p, const Atom* q, Index m, Index n
         val += delta*delta;
     }
 
-    dist_comps++;
+    distcomps++;
 
     return std::sqrt(val);
 }

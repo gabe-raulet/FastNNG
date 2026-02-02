@@ -18,8 +18,8 @@ class PointContainer
         Index num_points() const;
         Index num_atoms() const;
 
-        const Atom* point_mem(Index i) const;
-        Index point_dim(Index i) const;
+        const Atom* mem(Index i) const;
+        Index size(Index i) const;
 
         Index read_fvecs(const char *fname);
         Index read_fvecs(const char *fname, MPI_Comm comm);
