@@ -59,6 +59,12 @@ template <class Atom, class Distance>
 int main_mpi(int argc, char *argv[])
 {
     using PointContainerType = PointContainer<Atom>;
+    using AtomVector = std::vector<Atom>;
+
+    using Edge = std::tuple<Index, Index, Real>;
+    using EdgeVector = std::vector<Edge>;
+
+    MPI_Datatype MPI_ATOM = mpi_type<Atom>();
 
     double mytime, time;
     Index mydistcomps, distcomps;
@@ -66,6 +72,8 @@ int main_mpi(int argc, char *argv[])
     Index size, mysize, myoffset;
     PointContainerType mypoints;
     Distance distance;
+
+    EdgeVector myedges;
 
     MPI_Barrier(comm);
     mytime = -MPI_Wtime();
@@ -98,6 +106,96 @@ int main_mpi(int argc, char *argv[])
         MPI_Reduce(&mydistcomps, &distcomps, 1, MPI_INDEX, MPI_SUM, 0, comm);
 
         if (!myrank) fprintf(stderr, "[time=%.3f] built cover trees [distcomps=%s,avg_distcomps=%s]\n", time, LARGE(distcomps), LARGE(static_cast<Index>((distcomps+0.0)/nprocs)));
+        fflush(stderr);
+    }
+
+    MPI_Barrier(comm);
+    mytime = -MPI_Wtime();
+    mydistcomps = distance.distcomps;
+
+    mysize = mypoints.num_points();
+    MPI_Exscan(&mysize, &myoffset, 1, MPI_INDEX, MPI_SUM, comm);
+    if (!myrank) myoffset = 0;
+
+    PointContainerType sendbuf = mypoints;
+    PointContainerType recvbuf;
+
+    int recvrank = (myrank+1)%nprocs;
+    int sendrank = (myrank-1+nprocs)%nprocs;
+
+    Index sendcount_buf[3], recvcount_buf[3];
+
+    int sendcount, sendcount_atoms;
+    int recvcount, recvcount_atoms;
+    Index sendoffset, recvoffset;
+
+    MPI_Request reqs[6];
+
+    sendoffset = myoffset;
+
+    for (int step = 0; step <= nprocs/2; ++step)
+    {
+        sendcount = sendbuf.num_points();
+        sendcount_atoms = sendbuf.num_atoms();
+
+        sendcount_buf[0] = sendcount;
+        sendcount_buf[1] = sendcount_atoms;
+        sendcount_buf[2] = sendoffset;
+
+        MPI_Irecv(recvcount_buf, 3, MPI_INT, recvrank, myrank,   comm, &reqs[0]);
+        MPI_Isend(sendcount_buf, 3, MPI_INT, sendrank, sendrank, comm, &reqs[1]);
+        MPI_Waitall(2, reqs, MPI_STATUSES_IGNORE);
+
+        recvcount = recvcount_buf[0];
+        recvcount_atoms = recvcount_buf[1];
+        recvoffset = recvcount_buf[2];
+
+        AtomVector& senddata = sendbuf.getdata();
+        IndexVector& sendoffsets = sendbuf.getoffsets();
+
+        AtomVector& recvdata = recvbuf.getdata();
+        IndexVector& recvoffsets = recvbuf.getoffsets();
+
+        recvdata.resize(recvcount_atoms);
+        recvoffsets.resize(recvcount+1);
+
+        MPI_Irecv(recvdata.data(), recvcount_atoms, MPI_ATOM, recvrank, myrank+nprocs, comm, &reqs[0]);
+        MPI_Isend(senddata.data(), sendcount_atoms, MPI_ATOM, sendrank, sendrank+nprocs, comm, &reqs[1]);
+
+        MPI_Irecv(recvoffsets.data(), recvcount+1, MPI_INDEX, recvrank, myrank+2*nprocs, comm, &reqs[2]);
+        MPI_Isend(sendoffsets.data(), sendcount+1, MPI_INDEX, sendrank, sendrank+2*nprocs, comm, &reqs[3]);
+
+        Index sendsize = sendbuf.num_points();
+
+        for (Index i = 0; i < sendsize; ++i)
+        {
+            RealVector dists;
+            IndexVector neighs;
+
+            Index found = tree.radius_query(mypoints, distance, sendbuf.mem(i), sendbuf.size(i), radius, neighs, dists);
+
+            for (Index j = 0; j < found; ++j)
+            {
+                myedges.emplace_back(i+sendoffset, neighs[j]+recvoffset, dists[j]);
+            }
+        }
+
+        MPI_Waitall(4, reqs, MPI_STATUSES_IGNORE);
+
+        std::swap(senddata, recvdata);
+        std::swap(sendoffsets, recvoffsets);
+        std::swap(sendoffset, recvoffset);
+    }
+
+    mytime += MPI_Wtime();
+    mydistcomps = distance.distcomps - mydistcomps;
+
+    if (verbosity >= 1)
+    {
+        MPI_Reduce(&mytime, &time, 1, MPI_DOUBLE, MPI_MAX, 0, comm);
+        MPI_Reduce(&mydistcomps, &distcomps, 1, MPI_INDEX, MPI_SUM, 0, comm);
+
+        if (!myrank) fprintf(stderr, "[time=%.3f] queried neighbors [distcomps=%s,avg_distcomps=%s]\n", time, LARGE(distcomps), LARGE(static_cast<Index>((distcomps+0.0)/nprocs)));
         fflush(stderr);
     }
 

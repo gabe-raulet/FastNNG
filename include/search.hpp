@@ -214,7 +214,7 @@ void CoverTree::build(const PointContainer<Atom>& points, Distance& distance)
 }
 
 template <class Atom, class Distance>
-Index CoverTree::radius_query(const PointContainer<Atom>& points, Distance& distance, const Atom* query, Index dim, Real radius, IndexVector& neighbors) const
+Index CoverTree::radius_query(const PointContainer<Atom>& points, Distance& distance, const Atom* query, Index dim, Real radius, IndexVector& neighs, RealVector& dists) const
 {
     if (points.num_points() == 0)
         return 0;
@@ -236,7 +236,8 @@ Index CoverTree::radius_query(const PointContainer<Atom>& points, Distance& dist
 
             if (dist <= radius)
             {
-                neighbors.push_back(leaf);
+                neighs.push_back(leaf);
+                dists.push_back(dist);
                 found++;
             }
         }

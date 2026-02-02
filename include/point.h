@@ -24,6 +24,9 @@ class PointContainer
         Index read_fvecs(const char *fname);
         Index read_fvecs(const char *fname, MPI_Comm comm);
 
+        AtomVector& getdata() { return data; }
+        IndexVector& getoffsets() { return offsets; }
+
     protected:
 
         AtomVector data;
