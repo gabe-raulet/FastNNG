@@ -13,6 +13,7 @@
 #include "utils.h"
 #include "point.h"
 #include "search.h"
+#include "graph.h"
 
 MPI_Comm comm;
 int myrank, nprocs;
@@ -67,7 +68,10 @@ int main_mpi(int argc, char *argv[])
     MPI_Datatype MPI_ATOM = mpi_type<Atom>();
 
     double mytime, time;
+    double mytottime, tottime;
+
     Index mydistcomps, distcomps;
+    Index mytotdistcomps, totdistcomps;
 
     Index size, mysize, myoffset;
     PointContainerType mypoints;
@@ -77,6 +81,7 @@ int main_mpi(int argc, char *argv[])
 
     MPI_Barrier(comm);
     mytime = -MPI_Wtime();
+    mytottime = -MPI_Wtime();
     size = mypoints.read_fvecs(infile, comm);
     mytime += MPI_Wtime();
 
@@ -123,7 +128,7 @@ int main_mpi(int argc, char *argv[])
     int recvrank = (myrank+1)%nprocs;
     int sendrank = (myrank-1+nprocs)%nprocs;
 
-    Index sendcount_buf[3], recvcount_buf[3];
+    int sendcount_buf[3], recvcount_buf[3];
 
     int sendcount, sendcount_atoms;
     int recvcount, recvcount_atoms;
@@ -176,7 +181,7 @@ int main_mpi(int argc, char *argv[])
 
             for (Index j = 0; j < found; ++j)
             {
-                myedges.emplace_back(i+sendoffset, neighs[j]+recvoffset, dists[j]);
+                myedges.emplace_back(i+sendoffset, neighs[j]+myoffset, dists[j]);
             }
         }
 
@@ -199,115 +204,25 @@ int main_mpi(int argc, char *argv[])
         fflush(stderr);
     }
 
-    /* ref
-    double mytime, time;
-    double mytottime, tottime;
-
-    Index num_points, mysize, myoffset;
-    PointContainer<Atom> mypoints;
-    Distance distance;
-
-    MPI_Barrier(comm);
-    mytottime = -MPI_Wtime();
-    mytime = -MPI_Wtime();
-
-    if (!strcmp(metric, "edit"))
-        num_points = mypoints.read_seqs(infile, comm);
-    else if (!strcmp(metric, "l2"))
-        num_points = mypoints.read_fvecs(infile, comm);
-
-    mytime += MPI_Wtime();
-
-    if (verbosity >= 1)
-    {
-        MPI_Reduce(&mytime, &time, 1, MPI_DOUBLE, MPI_MAX, 0, comm);
-        if (!myrank) fprintf(stderr, "[time=%.3f] read input file '%s' [size=%lld]\n", time, infile, num_points);
-        fflush(stderr);
-    }
-
     MPI_Barrier(comm);
     mytime = -MPI_Wtime();
 
-    CoverTree search(cover, leaf_size);
-    search.build(mypoints, distance);
-
-    mytime += MPI_Wtime();
-
-    if (verbosity >= 1)
-    {
-        MPI_Reduce(&mytime, &time, 1, MPI_DOUBLE, MPI_MAX, 0, comm);
-        if (!myrank) fprintf(stderr, "[time=%.3f] built cover tree\n", time);
-        fflush(stderr);
-    }
-
-    MPI_Barrier(comm);
-    mytime = -MPI_Wtime();
-
-    using Edge = std::tuple<Index, Index, Real>;
-    using EdgeVector = std::vector<Edge>;
-
-    EdgeVector myedges;
-
-    auto functor = [&](const Point<Atom>& p, const Point<Atom>& q, Real dist)
-    {
-        myedges.emplace_back(q.id(), p.id(), dist);
-    };
-
-    mysize = mypoints.num_points();
-
-    int recvrank = (myrank+1)%nprocs;
-    int sendrank = (myrank-1+nprocs)%nprocs;
-
-    PointContainer<Atom> sendbuf = mypoints;
-    PointContainer<Atom> recvbuf;
-
-    using SendrecvRequest = typename PointContainer<Atom>::SendrecvRequest;
-
-    SendrecvRequest request;
-
-    for (int step = 0; step <= nprocs/2; ++step)
-    {
-        sendbuf.sendrecv(recvbuf, recvrank, sendrank, comm, request);
-
-        Index targsize = sendbuf.num_points();
-
-        for (Index i = 0; i < targsize; ++i)
-        {
-            search.radius_query(mypoints, distance, sendbuf[i], radius, functor);
-        }
-
-        request.wait();
-
-        sendbuf.swap(recvbuf);
-    }
-
-    mytime += MPI_Wtime();
-
-    if (verbosity >= 1)
-    {
-        MPI_Reduce(&mytime, &time, 1, MPI_DOUBLE, MPI_MAX, 0, comm);
-        if (!myrank) fprintf(stderr, "[time=%.3f] found neighbors\n", time);
-        fflush(stderr);
-    }
-
-    MPI_Barrier(comm);
-    mytime = -MPI_Wtime();
-
-    Graph graph(myedges, num_points);
+    Graph graph(myedges, size);
     graph.redistribute_edges(comm);
 
     mytime += MPI_Wtime();
     mytottime += MPI_Wtime();
+    mytotdistcomps = distance.distcomps;
 
     if (verbosity >= 1)
     {
         Index num_edges;
-        Index my_num_edges = graph.num_edges();
+        Index my_num_edges = graph.my_num_edges();
 
-        MPI_Reduce(&my_num_edges, &num_edges, 1, MPI_INDEX, MPI_SUM, 0, comm);
         MPI_Reduce(&mytime, &time, 1, MPI_DOUBLE, MPI_MAX, 0, comm);
+        MPI_Reduce(&my_num_edges, &num_edges, 1, MPI_INDEX, MPI_SUM, 0, comm);
 
-        if (!myrank) fprintf(stderr, "[time=%.3f] redistributed edges [points=%lld,edges=%lld,density=%.3f]\n", time, num_points, num_edges, (num_edges+0.0)/num_points);
+        if (!myrank) fprintf(stderr, "[time=%.3f] redistributed edges [points=%lld,edges=%lld,density=%.3f]\n", time, size, num_edges, (num_edges+0.0)/size);
         fflush(stderr);
     }
 
@@ -327,9 +242,9 @@ int main_mpi(int argc, char *argv[])
     }
 
     MPI_Reduce(&mytottime, &tottime, 1, MPI_DOUBLE, MPI_MAX, 0, comm);
-    if (!myrank) fprintf(stderr, "[time=%.3f] complete\n", tottime);
+    MPI_Reduce(&mytotdistcomps, &totdistcomps, 1, MPI_INDEX, MPI_SUM, 0, comm);
+    if (!myrank) fprintf(stderr, "[time=%.3f] complete [distcomps=%s,avg_distcomps=%s]\n", tottime, LARGE(totdistcomps), LARGE(static_cast<Index>((totdistcomps+0.0)/nprocs)));
     fflush(stderr);
-    */
 
     return 0;
 }
