@@ -137,8 +137,6 @@ int main_mpi(int argc, char *argv[])
     mytime += MPI_Wtime();
     mydistcomps = distance.distcomps - mydistcomps;
 
-    diagram.sanity_file(comm);
-
     if (verbosity >= 1)
     {
         MPI_Reduce(&mytime, &time, 1, MPI_DOUBLE, MPI_MAX, 0, comm);
@@ -162,23 +160,6 @@ int main_mpi(int argc, char *argv[])
         if (!myrank) fprintf(stderr, "[time=%.3f] coalesced cells\n", time);
         fflush(stdout);
     }
-
-    {
-        Index mynumcells = mycells.size();
-        Index mycelloffset;
-
-        MPI_Exscan(&mynumcells, &mycelloffset, 1, MPI_INDEX, MPI_SUM, comm);
-        if (!myrank) mycelloffset = 0;
-
-        for (Index i = 0; i < mynumcells; ++i)
-        {
-            std::stringstream ss;
-            ss << "sanity.cell" << (i+mycelloffset) << ".txt";
-            std::string s = ss.str();
-            mycells[i].sanity_file(s.c_str());
-        }
-    }
-
 
     return 0;
 }

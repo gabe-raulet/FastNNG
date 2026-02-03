@@ -51,8 +51,6 @@ class VoronoiCell : public PointContainer<Atom_>
 
         VoronoiCell(const PointContainerType& points, const IndexVector& global_indices, const RealVector& dist_to_centers);
 
-        void sanity_file(const char *fname) const;
-
     private:
 
         PointContainerType ghost_points;
@@ -74,8 +72,6 @@ class VoronoiDiagram
         VoronoiDiagram(const PointContainerType& points, const PointContainerType& centers, const IndexVector& center_ids, Distance& distance);
 
         void coalesce_cells(const PointContainerType& mypoints, std::vector<VoronoiCellType>& mycells, MPI_Comm comm) const;
-
-        void sanity_file(MPI_Comm comm) const;
 
     private:
 
