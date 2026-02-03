@@ -30,10 +30,31 @@ class PointContainer
         AtomVector& getdata() { return data; }
         IndexVector& getoffsets() { return offsets; }
 
+        void localgather(const PointContainer& points, const IndexVector& local_indices);
+        void allgather(const PointContainer& mypoints, MPI_Comm comm);
+
     protected:
 
         AtomVector data;
         IndexVector offsets;
+};
+
+template <class Atom_>
+class VoronoiDiagram
+{
+    public:
+
+        using Atom = Atom_;
+        using PointContainerType = PointContainer<Atom>;
+
+        template <class Distance>
+        VoronoiDiagram(const PointContainerType& points, const PointContainerType& centers, Distance& distance);
+
+    private:
+
+        PointContainerType centers;
+        IndexVector cell_indices;
+        RealVector dist_to_centers;
 };
 
 #include "point.hpp"

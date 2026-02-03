@@ -294,3 +294,106 @@ Index PointContainer<Atom_>::read_fvecs(const char *fname, MPI_Comm comm)
 
     return total;
 }
+
+template <class Atom_>
+void PointContainer<Atom_>::localgather(const PointContainer& points, const IndexVector& local_indices)
+{
+    Index size = local_indices.size();
+    Index atom_count = 0;
+
+    offsets.resize(size+1);
+
+    for (Index i = 0; i < size; ++i)
+    {
+        offsets[i] = atom_count;
+        atom_count += points.size(local_indices[i]);
+    }
+
+    offsets[size] = atom_count;
+
+    data.clear();
+    data.reserve(atom_count);
+
+    for (Index i = 0; i < size; ++i)
+    {
+        const Atom *mem = points.mem(local_indices[i]);
+        Index dim = points.size(local_indices[i]);
+        data.insert(data.end(), mem, mem+dim);
+    }
+}
+
+template <class Atom_>
+void PointContainer<Atom_>::allgather(const PointContainer& mypoints, MPI_Comm comm)
+{
+    MPI_Datatype MPI_ATOM = mpi_type<Atom>();
+
+    int myrank, nprocs;
+    MPI_Comm_rank(comm, &myrank);
+    MPI_Comm_size(comm, &nprocs);
+
+    data.clear();
+    offsets.clear();
+
+    const AtomVector& sendbuf_atoms = mypoints.data;
+    AtomVector& recvbuf_atoms = data;
+
+    Index mysize = mypoints.num_points();
+
+    IndexVector sendbuf_sizes(mysize);
+    IndexVector recvbuf_sizes;
+
+    for (Index i = 0; i < mysize; ++i)
+    {
+        sendbuf_sizes[i] = mypoints.size(i);
+    }
+
+    std::vector<int> recvcounts(nprocs), rdispls(nprocs);
+    std::vector<int> recvcounts_atoms(nprocs), rdispls_atoms(nprocs);
+
+    recvcounts[myrank] = mysize;
+    recvcounts_atoms[myrank] = sendbuf_atoms.size();
+
+    MPI_Allgather(MPI_IN_PLACE, 1, MPI_INT, recvcounts.data(), 1, MPI_INT, comm);
+    MPI_Allgather(MPI_IN_PLACE, 1, MPI_INT, recvcounts_atoms.data(), 1, MPI_INT, comm);
+
+    std::exclusive_scan(recvcounts.begin(), recvcounts.end(), rdispls.begin(), 0);
+    std::exclusive_scan(recvcounts_atoms.begin(), recvcounts_atoms.end(), rdispls_atoms.begin(), 0);
+
+    int totrecv = recvcounts.back() + rdispls.back();
+    int totrecv_atoms = recvcounts_atoms.back() + rdispls_atoms.back();
+
+    recvbuf_atoms.resize(totrecv_atoms);
+    recvbuf_sizes.resize(totrecv);
+
+    MPI_Allgatherv(sendbuf_sizes.data(), recvcounts[myrank], MPI_INDEX, recvbuf_sizes.data(), recvcounts.data(), rdispls.data(), MPI_INDEX, comm);
+    MPI_Allgatherv(sendbuf_atoms.data(), recvcounts_atoms[myrank], MPI_ATOM, recvbuf_atoms.data(), recvcounts_atoms.data(), rdispls_atoms.data(), MPI_ATOM, comm);
+
+    offsets.resize(totrecv);
+
+    std::exclusive_scan(recvbuf_sizes.begin(), recvbuf_sizes.end(), offsets.begin(), (Index)0);
+    offsets.push_back(offsets.back() + recvbuf_sizes.back());
+
+    assert((offsets.back() == recvbuf_atoms.size()));
+}
+
+template <class Atom_>
+template <class Distance>
+VoronoiDiagram<Atom_>::VoronoiDiagram(const PointContainerType& points, const PointContainerType& centers, Distance& distance) : centers(centers), cell_indices(points.num_points(), 0), dist_to_centers(points.num_points(), std::numeric_limits<Real>::max())
+{
+    Index size = points.num_points();
+    Index num_centers = centers.num_points();
+
+    for (Index i = 0; i < size; ++i)
+    {
+        for (Index cell_index = 0; cell_index < num_centers; ++cell_index)
+        {
+            Real dist = distance(centers.mem(cell_index), points.mem(i), centers.size(cell_index), points.size(i));
+
+            if (dist <= dist_to_centers[i])
+            {
+                dist_to_centers[i] = dist;
+                cell_indices[i] = cell_index;
+            }
+        }
+    }
+}

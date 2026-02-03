@@ -1,0 +1,250 @@
+#include <mpi.h>
+#include <stdio.h>
+#include <iostream>
+#include <numeric>
+#include <string>
+#include <sstream>
+#include <iomanip>
+#include <string.h>
+#include <unistd.h>
+#include <algorithm>
+
+#include "utils.h"
+#include "point.h"
+#include "search.h"
+#include "graph.h"
+
+MPI_Comm comm;
+int myrank, nprocs;
+
+Real radius = -1;
+const char *infile = NULL;
+const char *outfile = NULL;
+const char *metric = "l2";
+
+Real cover = 1.5;
+Index leaf_size = 10;
+Index num_centers = 1;
+int rng_seed = -1;
+int verbosity = 1;
+
+template <class Atom>
+struct L2Distance
+{
+    Index distcomps = 0;
+    Real operator()(const Atom* p, const Atom* q, Index m, Index n);
+};
+
+template <class Atom>
+struct EditDistance
+{
+    Index distcomps = 0;
+    Real operator()(const Atom* s, const Atom* t, Index m, Index n);
+};
+
+template <class Atom, class Distance>
+int main_mpi(int argc, char *argv[]);
+
+void parse_cmdline(int argc, char *argv[]);
+int main(int argc, char *argv[])
+{
+    int err;
+    MPI_Init(&argc, &argv);
+    MPI_Comm_dup(MPI_COMM_WORLD, &comm);
+    MPI_Comm_rank(comm, &myrank);
+    MPI_Comm_size(comm, &nprocs);
+    parse_cmdline(argc, argv);
+
+    if (!strcmp(metric, "edit")) err = main_mpi<char, EditDistance<char>>(argc, argv);
+    else if (!strcmp(metric, "l2")) err = main_mpi<float, L2Distance<float>>(argc, argv);
+
+    MPI_Comm_free(&comm);
+    MPI_Finalize();
+    return err;
+}
+
+template <class Atom, class Distance>
+int main_mpi(int argc, char *argv[])
+{
+    using PointContainerType = PointContainer<Atom>;
+    using VoronoiDiagramType = VoronoiDiagram<Atom>;
+    using AtomVector = std::vector<Atom>;
+
+    using Edge = std::tuple<Index, Index, Real>;
+    using EdgeVector = std::vector<Edge>;
+
+    MPI_Datatype MPI_ATOM = mpi_type<Atom>();
+
+    double mytime, time;
+    double mytottime, tottime;
+
+    Index mydistcomps, distcomps;
+    Index mytotdistcomps, totdistcomps;
+
+    Index size, mysize, myoffset;
+    PointContainerType mypoints;
+    Distance distance;
+
+    EdgeVector myedges;
+
+    MPI_Barrier(comm);
+    mytime = -MPI_Wtime();
+    mytottime = -MPI_Wtime();
+
+    if (!strcmp(metric, "edit")) size = mypoints.read_seqs(infile, comm);
+    else if (!strcmp(metric, "l2")) size = mypoints.read_fvecs(infile, comm);
+
+    mysize = mypoints.num_points();
+    MPI_Exscan(&mysize, &myoffset, 1, MPI_INDEX, MPI_SUM, comm);
+    if (!myrank) myoffset = 0;
+
+    mytime += MPI_Wtime();
+
+    assert((num_centers <= size));
+
+    if (verbosity >= 1)
+    {
+        Index num_atoms, my_num_atoms = mypoints.num_atoms();
+
+        MPI_Reduce(&mytime, &time, 1, MPI_DOUBLE, MPI_MAX, 0, comm);
+        MPI_Reduce(&my_num_atoms, &num_atoms, 1, MPI_INDEX, MPI_SUM, 0, comm);
+
+        if (!myrank) fprintf(stderr, "[time=%.3f] read input file '%s' [size=%lld,atoms=%s]\n", time, infile, size, LARGE(num_atoms));
+        fflush(stderr);
+    }
+
+    MPI_Barrier(comm);
+    mytime = -MPI_Wtime();
+    mydistcomps = distance.distcomps;
+
+    IndexVector landmarks, mylandmarks;
+    if (!myrank) selection_sample(size, num_centers, landmarks, rng_seed);
+    else landmarks.resize(num_centers);
+
+    MPI_Bcast(landmarks.data(), (int)num_centers, MPI_INDEX, 0, comm);
+
+    for (Index id : landmarks)
+        if (myoffset <= id && id < myoffset+mysize)
+            mylandmarks.push_back(id-myoffset);
+
+    PointContainerType mycenters, centers;
+
+    mycenters.localgather(mypoints, mylandmarks);
+    centers.allgather(mycenters, comm);
+
+    VoronoiDiagramType diagram(mypoints, centers, distance);
+
+    mytime += MPI_Wtime();
+    mydistcomps = distance.distcomps - mydistcomps;
+
+    if (verbosity >= 1)
+    {
+        MPI_Reduce(&mytime, &time, 1, MPI_DOUBLE, MPI_MAX, 0, comm);
+        MPI_Reduce(&mydistcomps, &distcomps, 1, MPI_INDEX, MPI_SUM, 0, comm);
+
+        if (!myrank) fprintf(stderr, "[time=%.3f] computed point partitioning [distcomps=%s,avg_distcomps=%s]\n", time, LARGE(distcomps), LARGE(static_cast<Index>((distcomps+0.0)/nprocs)));
+        fflush(stdout);
+    }
+
+    return 0;
+}
+
+void parse_cmdline(int argc, char *argv[])
+{
+    auto usage = [&](int err, bool print)
+    {
+        if (print)
+        {
+            fprintf(stderr, "Usage: %s [options] -i <points> -r <radius>\n", argv[0]);
+            fprintf(stderr, "Options: -c FLOAT cover tree base [%.2f]\n", cover);
+            fprintf(stderr, "         -l INT   leaf size [%lld]\n", leaf_size);
+            fprintf(stderr, "         -v INT   verbosity level [%d]\n", verbosity);
+            fprintf(stderr, "         -D STR   metric [%s]\n", metric);
+            fprintf(stderr, "         -o FILE  output edge file\n");
+            fprintf(stderr, "         -h       help message\n");
+        }
+
+        MPI_Finalize();
+        std::exit(err);
+    };
+
+    int c;
+    while ((c = getopt(argc, argv, "i:r:c:l:v:o:D:h")) >= 0)
+    {
+
+        if      (c == 'i') infile = optarg;
+        else if (c == 'r') radius = atof(optarg);
+        else if (c == 'c') cover = atof(optarg);
+        else if (c == 'l') leaf_size = atoi(optarg);
+        else if (c == 'v') verbosity = atoi(optarg);
+        else if (c == 'D') metric = optarg;
+        else if (c == 'o') outfile = optarg;
+        else if (c == 'h') usage(0, myrank == 0);
+    }
+
+    if (!infile)
+    {
+        if (!myrank) fprintf(stderr, "error: missing input file argument! (-i)\n");
+        usage(1, myrank == 0);
+    }
+
+    if (radius < 0)
+    {
+        if (!myrank) fprintf(stderr, "error: missing radius argument! (-r)\n");
+        usage(1, myrank == 0);
+    }
+
+    if (strcmp(metric, "edit") && strcmp(metric, "l2"))
+    {
+        if (!myrank) fprintf(stderr, "error: invalid metric argument! (-D)\n");
+        usage(1, myrank == 0);
+    }
+}
+
+template <class Atom>
+Real L2Distance<Atom>::operator()(const Atom* p, const Atom* q, Index m, Index n)
+{
+    assert((m == n));
+
+    Real val = 0;
+    Real delta;
+
+    for (Index i = 0; i < m; ++i)
+    {
+        delta = static_cast<Real>(p[i] - q[i]);
+        val += delta*delta;
+    }
+
+    distcomps++;
+
+    return std::sqrt(val);
+}
+
+template <class Atom>
+Real EditDistance<Atom>::operator()(const Atom* s, const Atom* t, Index m, Index n)
+{
+    IndexVector v0(n+1), v1(n+1);
+
+    for (Index i = 0; i <= n; ++i)
+        v0[i] = i;
+
+    for (Index i = 0; i < m; ++i)
+    {
+        v1[0] = i+1;
+
+        for (Index j = 0; j < n; ++j)
+        {
+            Index del = v0[j+1]+1;
+            Index ins = v1[j+0]+1;
+            Index sub = (s[i] == t[j])? v0[j] : v0[j]+1;
+
+            v1[j+1] = std::min(del, std::min(ins, sub));
+        }
+
+        std::swap(v0, v1);
+    }
+
+    distcomps++;
+
+    return static_cast<Real>(v0[n]);
+}
