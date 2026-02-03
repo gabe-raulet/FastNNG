@@ -14,11 +14,11 @@ class CoverTree
         template <class Atom, class Distance>
         void build(const PointContainer<Atom>& points, Distance& distance);
 
-        template <class Atom, class Distance>
-        Index radius_query(const PointContainer<Atom>& points, Distance& distance, const Atom* query, Index dim, Real radius, IndexVector& neighs, RealVector& dists) const;
+        template <class Atom, class Distance, class Functor>
+        Index radius_query(const PointContainer<Atom>& points, Distance& distance, const Atom* query, Index dim, Real radius, const Functor& functor) const;
 
-        template <class Atom, class Distance>
-        Index radius_query_batched(const PointContainer<Atom>& points, Distance& distance, const PointContainer<Atom>& queries, Real radius, IndexVectorVector& neighs, RealVectorVector& dists) const;
+        template <class Atom, class Distance, class Functor>
+        Index radius_query_batched(const PointContainer<Atom>& points, Distance& distance, const PointContainer<Atom>& queries, Real radius, const Functor& functor) const;
 
         template <class Atom, class Distance>
         bool has_radius_neighbor(const PointContainer<Atom>& points, Distance& distance, const Atom* query, Index dim, Real radius) const;

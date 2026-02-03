@@ -753,7 +753,11 @@ void VoronoiDiagram<Atom_>::add_ghost_points_systolic(std::vector<VoronoiCellTyp
     int sendcount_buf[2], recvcount_buf[2];
 
     IndexVector ghostcells;
-    RealVector ghostweights;
+
+    auto functor = [&](Index neighbor, Real dist)
+    {
+        ghostcells.push_back(neighbor);
+    };
 
     for (int step = 0; step <= nprocs/2; ++step)
     {
@@ -795,8 +799,8 @@ void VoronoiDiagram<Atom_>::add_ghost_points_systolic(std::vector<VoronoiCellTyp
             const Atom *query = mem;
             mem += dim;
 
-            ghostcells.clear(), ghostweights.clear();
-            mycentertree.radius_query(mycenters, distance, query, dim, dist + 2*radius, ghostcells, ghostweights);
+            ghostcells.clear();
+            mycentertree.radius_query(mycenters, distance, query, dim, dist + 2*radius, functor);
 
             if (ghostcells.empty())
                 continue;

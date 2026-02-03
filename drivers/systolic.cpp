@@ -181,23 +181,12 @@ int main_mpi(int argc, char *argv[])
 
         Index sendsize = sendbuf.num_points();
 
-        IndexVectorVector neighs_vec;
-        RealVectorVector dists_vec;
-
-        tree.radius_query_batched(mypoints, distance, sendbuf, radius, neighs_vec, dists_vec);
-
-        for (Index i = 0; i < sendsize; ++i)
+        auto functor = [&](Index neighbor, Index query, Real weight)
         {
-            IndexVector& neighs = neighs_vec[i];
-            RealVector& dists = dists_vec[i];
+            myedges.emplace_back(neighbor+myoffset, query+sendoffset, weight);
+        };
 
-            Index found = neighs.size();
-
-            for (Index j = 0; j < found; ++j)
-            {
-                myedges.emplace_back(i+sendoffset, neighs[j]+myoffset, dists[j]);
-            }
-        }
+        tree.radius_query_batched(mypoints, distance, sendbuf, radius, functor);
 
         MPI_Waitall(4, reqs, MPI_STATUSES_IGNORE);
 

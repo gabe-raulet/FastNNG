@@ -213,8 +213,8 @@ void CoverTree::build(const PointContainer<Atom>& points, Distance& distance)
     std::for_each(childarr.begin(), childarr.end(), [&](Index& id) { id = old_to_new[id]; });
 }
 
-template <class Atom, class Distance>
-Index CoverTree::radius_query(const PointContainer<Atom>& points, Distance& distance, const Atom* query, Index dim, Real radius, IndexVector& neighs, RealVector& dists) const
+template <class Atom, class Distance, class Functor>
+Index CoverTree::radius_query(const PointContainer<Atom>& points, Distance& distance, const Atom* query, Index dim, Real radius, const Functor& functor) const
 {
     if (points.num_points() == 0)
         return 0;
@@ -236,8 +236,7 @@ Index CoverTree::radius_query(const PointContainer<Atom>& points, Distance& dist
 
             if (dist <= radius)
             {
-                neighs.push_back(leaf);
-                dists.push_back(dist);
+                functor(leaf, dist);
                 found++;
             }
         }
@@ -298,8 +297,8 @@ bool CoverTree::has_radius_neighbor(const PointContainer<Atom>& points, Distance
     return false;
 }
 
-template <class Atom, class Distance>
-Index CoverTree::radius_query_batched(const PointContainer<Atom>& points, Distance& distance, const PointContainer<Atom>& queries, Real radius, IndexVectorVector& neighs, RealVectorVector& dists) const
+template <class Atom, class Distance, class Functor>
+Index CoverTree::radius_query_batched(const PointContainer<Atom>& points, Distance& distance, const PointContainer<Atom>& queries, Real radius, const Functor& functor) const
 {
     if (points.num_points() == 0)
         return 0;
@@ -315,12 +314,6 @@ Index CoverTree::radius_query_batched(const PointContainer<Atom>& points, Distan
 
     queue.back().second.resize(num_queries);
     std::iota(queue.back().second.begin(), queue.back().second.end(), (Index)0);
-
-    neighs.clear();
-    dists.clear();
-
-    neighs.resize(num_queries);
-    dists.resize(num_queries);
 
     while (!queue.empty())
     {
@@ -343,8 +336,7 @@ Index CoverTree::radius_query_batched(const PointContainer<Atom>& points, Distan
                 {
                     assert((0 <= q && q < num_queries));
 
-                    neighs[q].push_back(leaf);
-                    dists[q].push_back(dist);
+                    functor(leaf, q, dist);
                     found++;
                 }
             }
