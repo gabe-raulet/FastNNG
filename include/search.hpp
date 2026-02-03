@@ -257,6 +257,83 @@ Index CoverTree::radius_query(const PointContainer<Atom>& points, Distance& dist
     return found;
 }
 
+template <class Atom, class Distance>
+Index CoverTree::radius_query_batched(const PointContainer<Atom>& points, Distance& distance, const PointContainer<Atom>& queries, Real radius, IndexVectorVector& neighs, RealVectorVector& dists) const
+{
+    if (points.num_points() == 0)
+        return 0;
+
+    Index num_queries = queries.num_points();
+    Index found = 0;
+
+    using NeighPair = std::pair<Index, IndexVector>;
+    using NeighPairQueue = std::deque<NeighPair>;
+
+    NeighPairQueue queue;
+    queue.emplace_back(0, IndexVector());
+
+    queue.back().second.resize(num_queries);
+    std::iota(queue.back().second.begin(), queue.back().second.end(), (Index)0);
+
+    neighs.clear();
+    dists.clear();
+
+    neighs.resize(num_queries);
+    dists.resize(num_queries);
+
+    while (!queue.empty())
+    {
+        Index u = queue.front().first;
+        IndexVector ids = queue.front().second;
+        queue.pop_front();
+
+        auto first = child_begin(u);
+        auto last = child_end(u);
+
+        if (first == last)
+        {
+            Index leaf = centers[u];
+
+            for (Index q : ids)
+            {
+                Real dist = distance(points.mem(leaf), queries.mem(q), points.size(leaf), queries.size(q));
+
+                if (dist <= radius)
+                {
+                    assert((0 <= q && q < num_queries));
+
+                    neighs[q].push_back(leaf);
+                    dists[q].push_back(dist);
+                    found++;
+                }
+            }
+        }
+        else
+        {
+            for (; first != last; ++first)
+            {
+                Index child = *first;
+                Real epsilon = radii[child] + radius;
+
+                IndexVector newids;
+
+                for (Index q : ids)
+                {
+                    if (distance(points.mem(centers[child]), queries.mem(q), points.size(centers[child]), queries.size(q)) <= epsilon)
+                        newids.push_back(q);
+                }
+
+                if (!newids.empty())
+                {
+                    queue.emplace_back(child, newids);
+                }
+            }
+        }
+    }
+
+    return found;
+}
+
 typename IndexVector::const_iterator CoverTree::child_begin(Index vertex) const
 {
     return childarr.begin() + childptrs[vertex];

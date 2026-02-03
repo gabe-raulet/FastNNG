@@ -181,12 +181,17 @@ int main_mpi(int argc, char *argv[])
 
         Index sendsize = sendbuf.num_points();
 
+        IndexVectorVector neighs_vec;
+        RealVectorVector dists_vec;
+
+        tree.radius_query_batched(mypoints, distance, sendbuf, radius, neighs_vec, dists_vec);
+
         for (Index i = 0; i < sendsize; ++i)
         {
-            RealVector dists;
-            IndexVector neighs;
+            IndexVector& neighs = neighs_vec[i];
+            RealVector& dists = dists_vec[i];
 
-            Index found = tree.radius_query(mypoints, distance, sendbuf.mem(i), sendbuf.size(i), radius, neighs, dists);
+            Index found = neighs.size();
 
             for (Index j = 0; j < found; ++j)
             {

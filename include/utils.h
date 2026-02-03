@@ -40,6 +40,9 @@ using Real = float;
 using IndexVector = std::vector<Index>;
 using RealVector = std::vector<Real>;
 
+using IndexVectorVector = std::vector<IndexVector>;
+using RealVectorVector = std::vector<RealVector>;
+
 template <class Iter>
 std::string container_repr(Iter first, Iter last);
 
