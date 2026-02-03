@@ -69,11 +69,14 @@ class VoronoiCell : public PointContainer<Atom_>
         template <class Distance>
         void find_neighbors(Real cover, Index leaf_size, Distance& distance, Real radius, EdgeVector& myedges) const;
 
+        void set_interior(Index i) { interior[i] = true; }
+
     private:
 
         PointContainerType ghost_points;
         IndexVector global_indices, global_ghost_indices;
         RealVector dist_to_centers;
+        std::vector<bool> interior;
 };
 
 template <class Atom_>
@@ -93,6 +96,9 @@ class VoronoiDiagram
 
         template <class Distance>
         void add_ghost_points_systolic(std::vector<VoronoiCellType>& mycells, Distance& distance, Real radius, Real cover, Index leaf_size, MPI_Comm comm) const;
+
+        template <class Distance>
+        void add_ghost_points_systolic_rips(std::vector<VoronoiCellType>& mycells, Distance& distance, Real radius, Real cover, Index leaf_size, MPI_Comm comm) const;
 
     private:
 
