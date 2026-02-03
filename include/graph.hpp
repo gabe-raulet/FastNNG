@@ -1,4 +1,4 @@
-Graph::Graph(const EdgeVector& myedges, Index num_vertices) : myedges(myedges), num_vertices(num_vertices) {}
+Graph::Graph(const EdgeVector& myedges, Index num_verts) : myedges(myedges), num_verts(num_verts) {}
 
 Index Graph::my_num_edges() const { return myedges.size(); }
 
@@ -12,9 +12,9 @@ void Graph::redistribute_edges(MPI_Comm comm)
     MPI_Comm_rank(comm, &myrank);
     MPI_Comm_size(comm, &nprocs);
 
-    Index chunk = num_vertices / nprocs;
+    Index chunk = num_verts / nprocs;
     Index myoffset = myrank * chunk;
-    Index mysize = (myrank == nprocs-1)? num_vertices - (nprocs-1)*chunk : chunk;
+    Index mysize = (myrank == nprocs-1)? num_verts - (nprocs-1)*chunk : chunk;
 
     std::vector<int> sendcounts(nprocs,0), sdispls(nprocs), recvcounts(nprocs), rdispls(nprocs);
 
@@ -72,7 +72,7 @@ void Graph::write_file(const char *fname, MPI_Comm comm) const
     MPI_Allreduce(MPI_IN_PLACE, &num_edges, 1, MPI_INDEX, MPI_SUM, comm);
 
     std::ostringstream ss;
-    if (!myrank) ss << "% " << num_vertices << " " << num_vertices << " " << num_edges << "\n";
+    if (!myrank) ss << "% " << num_verts << " " << num_verts << " " << num_edges << "\n";
 
     ss << std::setprecision(6);
 
