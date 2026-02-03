@@ -14,6 +14,7 @@ class PointContainer
         PointContainer();
         PointContainer(const AtomVector& atoms, const IndexVector& sizes);
         PointContainer(const AtomVector& atoms, Index size, Index dim);
+        PointContainer(const std::vector<Atom*>& atoms, const IndexVector& sizes);
 
         Index num_points() const;
         Index num_atoms() const;
@@ -40,19 +41,43 @@ class PointContainer
 };
 
 template <class Atom_>
+class VoronoiCell
+{
+    public:
+
+        using Atom = Atom_;
+        using AtomVector = std::vector<Atom>;
+        using PointContainerType = PointContainer<Atom>;
+
+        VoronoiCell(const PointContainerType& points, const IndexVector& global_indices, const RealVector& dist_to_centers);
+
+    private:
+
+        PointContainerType points, ghost_points;
+        IndexVector global_indices, global_ghost_indices;
+        RealVector dist_to_centers;
+};
+
+template <class Atom_>
 class VoronoiDiagram
 {
     public:
 
         using Atom = Atom_;
+        using AtomVector = std::vector<Atom>;
         using PointContainerType = PointContainer<Atom>;
+        using VoronoiCellType = VoronoiCell<Atom>;
 
         template <class Distance>
-        VoronoiDiagram(const PointContainerType& points, const PointContainerType& centers, Distance& distance);
+        VoronoiDiagram(const PointContainerType& points, const PointContainerType& centers, const IndexVector& center_ids, Distance& distance);
+
+        void coalesce_cells(const PointContainerType& mypoints, std::vector<VoronoiCellType>& mycells, MPI_Comm comm) const;
 
     private:
 
         PointContainerType centers;
+        IndexVector center_ids;
+
         IndexVector cell_indices;
         RealVector dist_to_centers;
 };

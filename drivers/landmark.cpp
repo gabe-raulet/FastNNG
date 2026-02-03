@@ -68,6 +68,7 @@ int main_mpi(int argc, char *argv[])
 {
     using PointContainerType = PointContainer<Atom>;
     using VoronoiDiagramType = VoronoiDiagram<Atom>;
+    using VoronoiCellType = VoronoiCell<Atom>;
     using AtomVector = std::vector<Atom>;
 
     using Edge = std::tuple<Index, Index, Real>;
@@ -117,9 +118,10 @@ int main_mpi(int argc, char *argv[])
     mytime = -MPI_Wtime();
     mydistcomps = distance.distcomps;
 
-    IndexVector landmarks, mylandmarks;
+    IndexVector landmarks(num_centers), mylandmarks;
+    PointContainerType centers, mycenters;
+
     if (!myrank) selection_sample(size, num_centers, landmarks, rng_seed);
-    else landmarks.resize(num_centers);
 
     MPI_Bcast(landmarks.data(), (int)num_centers, MPI_INDEX, 0, comm);
 
@@ -127,12 +129,10 @@ int main_mpi(int argc, char *argv[])
         if (myoffset <= id && id < myoffset+mysize)
             mylandmarks.push_back(id-myoffset);
 
-    PointContainerType mycenters, centers;
-
     mycenters.localgather(mypoints, mylandmarks);
     centers.allgather(mycenters, comm);
 
-    VoronoiDiagramType diagram(mypoints, centers, distance);
+    VoronoiDiagramType diagram(mypoints, centers, landmarks, distance);
 
     mytime += MPI_Wtime();
     mydistcomps = distance.distcomps - mydistcomps;
@@ -146,21 +146,42 @@ int main_mpi(int argc, char *argv[])
         fflush(stdout);
     }
 
+    mytime = -MPI_Wtime();
+
+    std::vector<VoronoiCellType> mycells;
+    diagram.coalesce_cells(mypoints, mycells, comm);
+
+    mytime += MPI_Wtime();
+
+    if (verbosity >= 1)
+    {
+        MPI_Reduce(&mytime, &time, 1, MPI_DOUBLE, MPI_MAX, 0, comm);
+
+        if (!myrank) fprintf(stderr, "[time=%.3f] coalesced cells\n", time);
+        fflush(stdout);
+    }
+
+
     return 0;
 }
 
 void parse_cmdline(int argc, char *argv[])
 {
+    bool fix_num_centers = false;
+
     auto usage = [&](int err, bool print)
     {
         if (print)
         {
             fprintf(stderr, "Usage: %s [options] -i <points> -r <radius>\n", argv[0]);
-            fprintf(stderr, "Options: -c FLOAT cover tree base [%.2f]\n", cover);
+            fprintf(stderr, "Options: -m INT   number of centers [%lld]\n", num_centers);
+            fprintf(stderr, "         -c FLOAT cover tree base [%.2f]\n", cover);
             fprintf(stderr, "         -l INT   leaf size [%lld]\n", leaf_size);
             fprintf(stderr, "         -v INT   verbosity level [%d]\n", verbosity);
-            fprintf(stderr, "         -D STR   metric [%s]\n", metric);
+            fprintf(stderr, "         -D STR   distance metric [%s]\n", metric);
             fprintf(stderr, "         -o FILE  output edge file\n");
+            fprintf(stderr, "         -s INT   random number seed\n");
+            fprintf(stderr, "         -F       fix number of centers\n");
             fprintf(stderr, "         -h       help message\n");
         }
 
@@ -169,18 +190,22 @@ void parse_cmdline(int argc, char *argv[])
     };
 
     int c;
-    while ((c = getopt(argc, argv, "i:r:c:l:v:o:D:h")) >= 0)
+    while ((c = getopt(argc, argv, "i:r:m:c:l:v:o:s:FD:h")) >= 0)
     {
-
         if      (c == 'i') infile = optarg;
         else if (c == 'r') radius = atof(optarg);
         else if (c == 'c') cover = atof(optarg);
         else if (c == 'l') leaf_size = atoi(optarg);
         else if (c == 'v') verbosity = atoi(optarg);
-        else if (c == 'D') metric = optarg;
+        else if (c == 'm') num_centers = atoi(optarg);
         else if (c == 'o') outfile = optarg;
+        else if (c == 'F') fix_num_centers = true;
+        else if (c == 's') rng_seed = atoi(optarg);
+        else if (c == 'D') metric = optarg;
         else if (c == 'h') usage(0, myrank == 0);
     }
+
+    if (!fix_num_centers) num_centers *= nprocs;
 
     if (!infile)
     {
@@ -194,9 +219,9 @@ void parse_cmdline(int argc, char *argv[])
         usage(1, myrank == 0);
     }
 
-    if (strcmp(metric, "edit") && strcmp(metric, "l2"))
+    if (strcmp(metric, "edit") && strcmp(metric, "l1") && strcmp(metric, "l2"))
     {
-        if (!myrank) fprintf(stderr, "error: invalid metric argument! (-D)\n");
+        if (!myrank) fprintf(stderr, "error: invalid metric parameter! (-D) [must be one of: edit, l1, l2]\n");
         usage(1, myrank == 0);
     }
 }
