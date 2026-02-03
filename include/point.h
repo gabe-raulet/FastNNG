@@ -34,6 +34,8 @@ class PointContainer
         void localgather(const PointContainer& points, const IndexVector& local_indices);
         void allgather(const PointContainer& mypoints, MPI_Comm comm);
 
+        void push_back(const Atom *point_mem, Index point_size);
+
     protected:
 
         AtomVector data;
@@ -50,6 +52,19 @@ class VoronoiCell : public PointContainer<Atom_>
         using PointContainerType = PointContainer<Atom>;
 
         VoronoiCell(const PointContainerType& points, const IndexVector& global_indices, const RealVector& dist_to_centers);
+
+        Index index(Index i) const { return global_indices[i]; }
+        Real dist_to_center(Index i) const { return dist_to_centers[i]; }
+
+        Index num_ghosts() const { return ghost_points.num_points(); }
+        Index ghost_index(Index i) const { return global_ghost_indices[i]; }
+        Index ghost_size(Index i) const { return ghost_points.size(i); }
+        const Atom* ghost_mem(Index i) const { return ghost_points.mem(i); }
+
+        typename IndexVector::const_iterator ids_begin() const { return global_indices.cbegin(); }
+        typename IndexVector::const_iterator ids_end() const { return global_indices.cend(); }
+
+        void add_ghost_point(const Atom *point_mem, Index point_size, Index point_index);
 
     private:
 
@@ -72,6 +87,9 @@ class VoronoiDiagram
         VoronoiDiagram(const PointContainerType& points, const PointContainerType& centers, const IndexVector& center_ids, Distance& distance);
 
         void coalesce_cells(const PointContainerType& mypoints, std::vector<VoronoiCellType>& mycells, MPI_Comm comm) const;
+
+        template <class Distance>
+        void add_ghost_points_systolic(std::vector<VoronoiCellType>& mycells, Distance& distance, Real radius, Real cover, Index leaf_size, MPI_Comm comm) const;
 
     private:
 

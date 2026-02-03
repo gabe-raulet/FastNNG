@@ -161,6 +161,24 @@ int main_mpi(int argc, char *argv[])
         fflush(stdout);
     }
 
+    MPI_Barrier(comm);
+    mytime = -MPI_Wtime();
+    mydistcomps = distance.distcomps;
+
+    diagram.add_ghost_points_systolic(mycells, distance, radius, cover, leaf_size, comm);
+
+    mytime += MPI_Wtime();
+    mydistcomps = distance.distcomps - mydistcomps;
+
+    if (verbosity >= 1)
+    {
+        MPI_Reduce(&mytime, &time, 1, MPI_DOUBLE, MPI_MAX, 0, comm);
+        MPI_Reduce(&mydistcomps, &distcomps, 1, MPI_INDEX, MPI_SUM, 0, comm);
+
+        if (!myrank) fprintf(stderr, "[time=%.3f] added ghost points [distcomps=%s,avg_distcomps=%s]\n", time, LARGE(distcomps), LARGE(static_cast<Index>((distcomps+0.0)/nprocs)));
+        fflush(stdout);
+    }
+
     return 0;
 }
 

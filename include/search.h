@@ -20,6 +20,9 @@ class CoverTree
         template <class Atom, class Distance>
         Index radius_query_batched(const PointContainer<Atom>& points, Distance& distance, const PointContainer<Atom>& queries, Real radius, IndexVectorVector& neighs, RealVectorVector& dists) const;
 
+        template <class Atom, class Distance>
+        bool has_radius_neighbor(const PointContainer<Atom>& points, Distance& distance, const Atom* query, Index dim, Real radius) const;
+
     private:
 
         Real cover;
