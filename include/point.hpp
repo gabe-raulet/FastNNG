@@ -551,12 +551,12 @@ void VoronoiDiagram<Atom_>::coalesce_cells(const PointContainerType& mypoints, s
 
     for (Index i = 0; i < totsend; ++i)
     {
-        Index id = sendbuf_envs[i].id - myoffset;
-        const Atom *mem = mypoints.mem(i);
-        Index dim = mypoints.size(i);
+        Index point_index = sendbuf_envs[i].id - myoffset;
+        Index point_size = mypoints.size(point_index);
+        const Atom *point_mem = mypoints.mem(point_index);
 
-        it = std::copy(mem, mem+dim, it);
-        assert((dim == sendbuf_envs[i].size));
+        it = std::copy(point_mem, point_mem+point_size, it);
+        assert((point_size == sendbuf_envs[i].size));
     }
 
     MPI_Request reqs[2];
