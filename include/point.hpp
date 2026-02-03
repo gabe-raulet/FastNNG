@@ -29,7 +29,7 @@ PointContainer<Atom_>::PointContainer(const AtomVector& atoms, Index size, Index
 }
 
 template <class Atom_>
-PointContainer<Atom_>::PointContainer(const std::vector<Atom*>& atoms, const IndexVector& sizes) : offsets(sizes.size()+1)
+PointContainer<Atom_>::PointContainer(const std::vector<const Atom*>& atoms, const IndexVector& sizes) : offsets(sizes.size()+1)
 {
     Index atom_count = 0;
     Index size = sizes.size();
@@ -583,7 +583,7 @@ void VoronoiDiagram<Atom_>::coalesce_cells(const PointContainerType& mypoints, s
         disp += size;
     }
 
-    std::vector<std::vector<Atom*>> cell_point_mems(my_assigned_cells);
+    std::vector<std::vector<const Atom*>> cell_point_mems(my_assigned_cells);
     std::vector<IndexVector> cell_point_sizes(my_assigned_cells);
     std::vector<IndexVector> cell_indices(my_assigned_cells);
     std::vector<RealVector> cell_dist_to_centers(my_assigned_cells);
@@ -597,7 +597,7 @@ void VoronoiDiagram<Atom_>::coalesce_cells(const PointContainerType& mypoints, s
         if (center_ids[recvbuf_envs[i].cell] == recvbuf_envs[i].id)
             cell_center_offsets[cell_index] = cell_point_mems[cell_index].size();
 
-        Atom *mem = &recvbuf_atoms[recv_offsets[i]];
+        const Atom *mem = &recvbuf_atoms[recv_offsets[i]];
         cell_point_mems[cell_index].push_back(mem);
         cell_point_sizes[cell_index].push_back(size);
         cell_indices[cell_index].push_back(recvbuf_envs[i].id);
@@ -609,7 +609,7 @@ void VoronoiDiagram<Atom_>::coalesce_cells(const PointContainerType& mypoints, s
 
     for (Index cell = 0; cell < my_assigned_cells; ++cell)
     {
-        std::vector<Atom*>& pts = cell_point_mems[cell];
+        std::vector<const Atom*>& pts = cell_point_mems[cell];
         RealVector& dists = cell_dist_to_centers[cell];
         IndexVector& indices = cell_indices[cell];
         IndexVector& point_sizes = cell_point_sizes[cell];
@@ -627,4 +627,65 @@ void VoronoiDiagram<Atom_>::coalesce_cells(const PointContainerType& mypoints, s
 }
 
 template <class Atom_>
+void VoronoiDiagram<Atom_>::sanity_file(MPI_Comm comm) const
+{
+    int myrank, nprocs;
+    MPI_Comm_rank(comm, &myrank);
+    MPI_Comm_size(comm, &nprocs);
+
+    FILE *f;
+    std::string fname;
+
+    {
+        std::stringstream ss;
+        ss << "sanity.diagram.rank" << myrank << ".txt";
+        fname = ss.str();
+    }
+
+    Index mysize = cell_indices.size();
+    Index myoffset;
+
+    MPI_Exscan(&mysize, &myoffset, 1, MPI_INDEX, MPI_SUM, comm);
+    if (!myrank) myoffset = 0;
+
+    f = fopen(fname.c_str(), "w");
+
+    fprintf(f, "index\tcenter\tcenter_id\tdist_to_center\n");
+
+    for (Index i = 0; i < mysize; ++i)
+    {
+        fprintf(f, "%lld\t%lld\t%lld\t%.5f\n", i+myoffset, cell_indices[i], center_ids[cell_indices[i]], dist_to_centers[i]);
+    }
+
+    fclose(f);
+}
+
+template <class Atom_>
 VoronoiCell<Atom_>::VoronoiCell(const PointContainerType& points, const IndexVector& global_indices, const RealVector& dist_to_centers) : points(points), global_indices(global_indices), dist_to_centers(dist_to_centers) {}
+
+template <class Atom_>
+void VoronoiCell<Atom_>::sanity_file(const char *fname) const
+{
+    FILE *f;
+
+    f = fopen(fname, "w");
+
+    fprintf(f, "index\tdist_to_center\tghost\n");
+
+    for (Index i = 0; i < global_indices.size(); ++i)
+    {
+        Index index = global_indices[i];
+        Real dist = dist_to_centers[i];
+
+        fprintf(f, "%lld\t%.5f\t%d\n", index, dist, 0);
+    }
+
+    for (Index i = 0; i < ghost_points.num_points(); ++i)
+    {
+        Index index = global_ghost_indices[i];
+
+        fprintf(f, "%lld\t%.5f\t%d\n", index, 0., 1);
+    }
+
+    fclose(f);
+}
