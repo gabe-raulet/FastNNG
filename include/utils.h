@@ -44,6 +44,9 @@ using IndexSet = std::unordered_set<Index>;
 using IndexVectorVector = std::vector<IndexVector>;
 using RealVectorVector = std::vector<RealVector>;
 
+using Edge = std::tuple<Index, Index, Real>;
+using EdgeVector = std::vector<Edge>;
+
 template <class Iter>
 std::string container_repr(Iter first, Iter last);
 

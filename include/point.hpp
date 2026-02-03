@@ -826,3 +826,24 @@ void VoronoiDiagram<Atom_>::add_ghost_points_systolic(std::vector<VoronoiCellTyp
 
     MPI_Type_free(&MPI_POINT_ENVELOPE);
 }
+
+template <class Atom_>
+template <class Distance>
+void VoronoiCell<Atom_>::find_neighbors(Real cover, Index leaf_size, Distance& distance, Real radius, EdgeVector& myedges) const
+{
+    CoverTree tree(cover, leaf_size);
+    tree.build(*this, distance);
+
+    auto functor = [&](Index neighbor, Index query, Real weight)
+    {
+        myedges.emplace_back(global_indices[neighbor], global_indices[query], weight);
+    };
+
+    auto ghost_functor = [&](Index neighbor, Index query, Real weight)
+    {
+        myedges.emplace_back(global_indices[neighbor], global_ghost_indices[query], weight);
+    };
+
+    tree.radius_query_batched(*this, distance, *this, radius, functor);
+    tree.radius_query_batched(*this, distance, ghost_points, radius, ghost_functor);
+}

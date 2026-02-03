@@ -68,9 +68,6 @@ int main_mpi(int argc, char *argv[])
     using PointContainerType = PointContainer<Atom>;
     using AtomVector = std::vector<Atom>;
 
-    using Edge = std::tuple<Index, Index, Real>;
-    using EdgeVector = std::vector<Edge>;
-
     MPI_Datatype MPI_ATOM = mpi_type<Atom>();
 
     double mytime, time;

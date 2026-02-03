@@ -142,7 +142,7 @@ int main_mpi(int argc, char *argv[])
         MPI_Reduce(&mytime, &time, 1, MPI_DOUBLE, MPI_MAX, 0, comm);
         MPI_Reduce(&mydistcomps, &distcomps, 1, MPI_INDEX, MPI_SUM, 0, comm);
 
-        if (!myrank) fprintf(stderr, "[time=%.3f] computed point partitioning [distcomps=%s,avg_distcomps=%s]\n", time, LARGE(distcomps), LARGE(static_cast<Index>((distcomps+0.0)/nprocs)));
+        if (!myrank) fprintf(stderr, "[time=%.3f] computed point partitioning [distcomps=%s,avg_distcomps=%s,centers=%lld]\n", time, LARGE(distcomps), LARGE(static_cast<Index>((distcomps+0.0)/nprocs)), num_centers);
         fflush(stdout);
     }
 
@@ -178,6 +178,69 @@ int main_mpi(int argc, char *argv[])
         if (!myrank) fprintf(stderr, "[time=%.3f] added ghost points [distcomps=%s,avg_distcomps=%s]\n", time, LARGE(distcomps), LARGE(static_cast<Index>((distcomps+0.0)/nprocs)));
         fflush(stdout);
     }
+
+    MPI_Barrier(comm);
+    mytime = -MPI_Wtime();
+    mydistcomps = distance.distcomps;
+
+    for (const VoronoiCellType& cell : mycells)
+    {
+        cell.find_neighbors(cover, leaf_size, distance, radius, myedges);
+    }
+
+    mytime += MPI_Wtime();
+    mydistcomps = distance.distcomps - mydistcomps;
+
+    if (verbosity >= 1)
+    {
+        MPI_Reduce(&mytime, &time, 1, MPI_DOUBLE, MPI_MAX, 0, comm);
+        MPI_Reduce(&mydistcomps, &distcomps, 1, MPI_INDEX, MPI_SUM, 0, comm);
+
+        if (!myrank) fprintf(stderr, "[time=%.3f] found neighbors [distcomps=%s,avg_distcomps=%s]\n", time, LARGE(distcomps), LARGE(static_cast<Index>((distcomps+0.0)/nprocs)));
+        fflush(stdout);
+    }
+
+    MPI_Barrier(comm);
+    mytime = -MPI_Wtime();
+
+    Graph graph(myedges, size);
+    graph.redistribute_edges(comm);
+
+    mytime += MPI_Wtime();
+    mytottime += MPI_Wtime();
+    mytotdistcomps = distance.distcomps;
+
+    if (verbosity >= 1)
+    {
+        Index num_edges;
+        Index my_num_edges = graph.my_num_edges();
+
+        MPI_Reduce(&mytime, &time, 1, MPI_DOUBLE, MPI_MAX, 0, comm);
+        MPI_Reduce(&my_num_edges, &num_edges, 1, MPI_INDEX, MPI_SUM, 0, comm);
+
+        if (!myrank) fprintf(stderr, "[time=%.3f] redistributed edges [points=%lld,edges=%lld,density=%.3f]\n", time, size, num_edges, (num_edges+0.0)/size);
+        fflush(stderr);
+    }
+
+    if (outfile)
+    {
+        MPI_Barrier(comm);
+        mytime = -MPI_Wtime();
+        graph.write_file(outfile, comm);
+        mytime += MPI_Wtime();
+
+        if (verbosity >= 1)
+        {
+            MPI_Reduce(&mytime, &time, 1, MPI_DOUBLE, MPI_MAX, 0, comm);
+            if (!myrank) fprintf(stderr, "[time=%.3f] wrote edges to file '%s'\n", time, outfile);
+            fflush(stderr);
+        }
+    }
+
+    MPI_Reduce(&mytottime, &tottime, 1, MPI_DOUBLE, MPI_MAX, 0, comm);
+    MPI_Reduce(&mytotdistcomps, &totdistcomps, 1, MPI_INDEX, MPI_SUM, 0, comm);
+    if (!myrank) fprintf(stderr, "[time=%.3f] complete [distcomps=%s,avg_distcomps=%s]\n", tottime, LARGE(totdistcomps), LARGE(static_cast<Index>((totdistcomps+0.0)/nprocs)));
+    fflush(stderr);
 
     return 0;
 }

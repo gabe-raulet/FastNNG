@@ -66,6 +66,9 @@ class VoronoiCell : public PointContainer<Atom_>
 
         void add_ghost_point(const Atom *point_mem, Index point_size, Index point_index);
 
+        template <class Distance>
+        void find_neighbors(Real cover, Index leaf_size, Distance& distance, Real radius, EdgeVector& myedges) const;
+
     private:
 
         PointContainerType ghost_points;

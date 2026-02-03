@@ -7,9 +7,6 @@ class Graph
 {
     public:
 
-        using Edge = std::tuple<Index, Index, Real>;
-        using EdgeVector = std::vector<Edge>;
-
         Graph(const EdgeVector& myedges, Index num_verts);
 
         Index my_num_edges() const;
