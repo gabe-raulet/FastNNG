@@ -21,7 +21,7 @@ int myrank, nprocs;
 Real radius = -1;
 const char *infile = NULL;
 const char *outfile = NULL;
-/* const char *metric = "l2"; */
+const char *metric = "l2";
 
 Real cover = 1.5;
 Index leaf_size = 10;
@@ -32,6 +32,13 @@ struct L2Distance
 {
     Index distcomps = 0;
     Real operator()(const Atom* p, const Atom* q, Index m, Index n);
+};
+
+template <class Atom>
+struct EditDistance
+{
+    Index distcomps = 0;
+    Real operator()(const Atom* s, const Atom* t, Index m, Index n);
 };
 
 template <class Atom, class Distance>
@@ -47,9 +54,8 @@ int main(int argc, char *argv[])
     MPI_Comm_size(comm, &nprocs);
     parse_cmdline(argc, argv);
 
-    err = main_mpi<float, L2Distance<float>>(argc, argv);
-    /* if (!strcmp(metric, "edit")) err = main_mpi<char, EditDistance<char>>(argc, argv); */
-    /* else if (!strcmp(metric, "l2")) err = main_mpi<float, L2Distance<float>>(argc, argv); */
+    if (!strcmp(metric, "edit")) err = main_mpi<char, EditDistance<char>>(argc, argv);
+    else if (!strcmp(metric, "l2")) err = main_mpi<float, L2Distance<float>>(argc, argv);
 
     MPI_Comm_free(&comm);
     MPI_Finalize();
@@ -82,7 +88,10 @@ int main_mpi(int argc, char *argv[])
     MPI_Barrier(comm);
     mytime = -MPI_Wtime();
     mytottime = -MPI_Wtime();
-    size = mypoints.read_fvecs(infile, comm);
+
+    if (!strcmp(metric, "edit")) size = mypoints.read_seqs(infile, comm);
+    else if (!strcmp(metric, "l2")) size = mypoints.read_fvecs(infile, comm);
+
     mytime += MPI_Wtime();
 
     if (verbosity >= 1)
@@ -259,7 +268,7 @@ void parse_cmdline(int argc, char *argv[])
             fprintf(stderr, "Options: -c FLOAT cover tree base [%.2f]\n", cover);
             fprintf(stderr, "         -l INT   leaf size [%lld]\n", leaf_size);
             fprintf(stderr, "         -v INT   verbosity level [%d]\n", verbosity);
-            /* fprintf(stderr, "         -D STR   metric [%s]\n", metric); */
+            fprintf(stderr, "         -D STR   metric [%s]\n", metric);
             fprintf(stderr, "         -o FILE  output edge file\n");
             fprintf(stderr, "         -h       help message\n");
         }
@@ -277,7 +286,7 @@ void parse_cmdline(int argc, char *argv[])
         else if (c == 'c') cover = atof(optarg);
         else if (c == 'l') leaf_size = atoi(optarg);
         else if (c == 'v') verbosity = atoi(optarg);
-        /* else if (c == 'D') metric = optarg; */
+        else if (c == 'D') metric = optarg;
         else if (c == 'o') outfile = optarg;
         else if (c == 'h') usage(0, myrank == 0);
     }
@@ -294,11 +303,11 @@ void parse_cmdline(int argc, char *argv[])
         usage(1, myrank == 0);
     }
 
-    /* if (strcmp(metric, "edit") && strcmp(metric, "l2")) */
-    /* { */
-        /* if (!myrank) fprintf(stderr, "error: invalid metric argument! (-D)\n"); */
-        /* usage(1, myrank == 0); */
-    /* } */
+    if (strcmp(metric, "edit") && strcmp(metric, "l2"))
+    {
+        if (!myrank) fprintf(stderr, "error: invalid metric argument! (-D)\n");
+        usage(1, myrank == 0);
+    }
 }
 
 template <class Atom>
@@ -318,4 +327,33 @@ Real L2Distance<Atom>::operator()(const Atom* p, const Atom* q, Index m, Index n
     distcomps++;
 
     return std::sqrt(val);
+}
+
+template <class Atom>
+Real EditDistance<Atom>::operator()(const Atom* s, const Atom* t, Index m, Index n)
+{
+    IndexVector v0(n+1), v1(n+1);
+
+    for (Index i = 0; i <= n; ++i)
+        v0[i] = i;
+
+    for (Index i = 0; i < m; ++i)
+    {
+        v1[0] = i+1;
+
+        for (Index j = 0; j < n; ++j)
+        {
+            Index del = v0[j+1]+1;
+            Index ins = v1[j+0]+1;
+            Index sub = (s[i] == t[j])? v0[j] : v0[j]+1;
+
+            v1[j+1] = std::min(del, std::min(ins, sub));
+        }
+
+        std::swap(v0, v1);
+    }
+
+    distcomps++;
+
+    return static_cast<Real>(v0[n]);
 }

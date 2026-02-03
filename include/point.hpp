@@ -108,6 +108,111 @@ Index PointContainer<Atom_>::read_fvecs(const char *fname)
 }
 
 template <class Atom_>
+Index PointContainer<Atom_>::read_seqs(const char *fname)
+{
+    assert((std::same_as<Atom, char>));
+
+    std::ifstream is;
+    std::string line;
+
+    Index id = 0;
+
+    is.open(fname, std::ios::in);
+
+    offsets.clear();
+    data.clear();
+
+    while (std::getline(is, line))
+    {
+        if (!line.empty() && line.back() == '\r')
+            line.pop_back();
+
+        if (line.empty())
+            continue;
+
+        offsets.push_back(data.size());
+        std::copy(line.begin(), line.end(), std::back_inserter(data));
+    }
+
+    offsets.push_back(data.size());
+    is.close();
+
+    return offsets.size()-1;
+}
+
+template <class Atom_>
+Index PointContainer<Atom_>::read_seqs(const char *fname, MPI_Comm comm)
+{
+    assert((std::same_as<Atom, char>));
+
+    int myrank, nprocs;
+    MPI_Comm_rank(comm, &myrank);
+    MPI_Comm_size(comm, &nprocs);
+
+    MPI_Datatype MPI_ATOM = MPI_CHAR;
+
+    AtomVector alldata;
+    IndexVector alloffsets;
+
+    Index size, myoffset, mysize, myleft, atoms;
+
+    if (!myrank)
+    {
+        PointContainer<Atom> allpoints;
+        allpoints.read_seqs(fname);
+
+        AtomVector& alldata_ref = allpoints.getdata();
+        IndexVector& alloffsets_ref = allpoints.getoffsets();
+
+        alldata.assign(alldata_ref.begin(), alldata_ref.end());
+        alloffsets.assign(alloffsets_ref.begin(), alloffsets_ref.end());
+
+        size = allpoints.num_points();
+        atoms = allpoints.num_atoms();
+    }
+
+    MPI_Bcast(&size, 1, MPI_INDEX, 0, comm);
+    MPI_Bcast(&atoms, 1, MPI_INDEX, 0, comm);
+
+    if (myrank != 0)
+    {
+        alldata.resize(atoms);
+        alloffsets.resize(size+1);
+    }
+
+    MPI_Bcast(alldata.data(), static_cast<int>(atoms), MPI_ATOM, 0, comm);
+    MPI_Bcast(alloffsets.data(), static_cast<int>(size+1), MPI_INDEX, 0, comm);
+
+    mysize = size/nprocs;
+    myleft = size%nprocs;
+
+    if (myrank < myleft)
+        mysize++;
+
+    MPI_Exscan(&mysize, &myoffset, 1, MPI_INDEX, MPI_SUM, comm);
+    if (!myrank) myoffset = 0;
+
+    data.clear();
+    offsets.clear();
+
+    for (Index i = myoffset; i < myoffset+mysize; ++i)
+    {
+        Index dataoffset = alloffsets[i];
+        Index datasize = alloffsets[i+1] - dataoffset;
+
+        auto first = alldata.begin() + dataoffset;
+        auto last = first + datasize;
+
+        offsets.push_back(data.size());
+        std::copy(first, last, std::back_inserter(data));
+    }
+
+    offsets.push_back(data.size());
+
+    return size;
+}
+
+template <class Atom_>
 Index PointContainer<Atom_>::read_fvecs(const char *fname, MPI_Comm comm)
 {
     assert((std::same_as<Atom, float>));
