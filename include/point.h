@@ -41,7 +41,7 @@ class PointContainer
 };
 
 template <class Atom_>
-class VoronoiCell
+class VoronoiCell : public PointContainer<Atom_>
 {
     public:
 
@@ -55,7 +55,7 @@ class VoronoiCell
 
     private:
 
-        PointContainerType points, ghost_points;
+        PointContainerType ghost_points;
         IndexVector global_indices, global_ghost_indices;
         RealVector dist_to_centers;
 };

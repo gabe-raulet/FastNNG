@@ -661,7 +661,7 @@ void VoronoiDiagram<Atom_>::sanity_file(MPI_Comm comm) const
 }
 
 template <class Atom_>
-VoronoiCell<Atom_>::VoronoiCell(const PointContainerType& points, const IndexVector& global_indices, const RealVector& dist_to_centers) : points(points), global_indices(global_indices), dist_to_centers(dist_to_centers) {}
+VoronoiCell<Atom_>::VoronoiCell(const PointContainerType& points, const IndexVector& global_indices, const RealVector& dist_to_centers) : PointContainerType(points), global_indices(global_indices), dist_to_centers(dist_to_centers) {}
 
 template <class Atom_>
 void VoronoiCell<Atom_>::sanity_file(const char *fname) const
