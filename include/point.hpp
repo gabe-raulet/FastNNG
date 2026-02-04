@@ -614,7 +614,7 @@ void VoronoiComplex<Atom_>::build_filtration(Distance& distance, Real radius, In
 }
 
 template <class Atom_>
-void VoronoiComplex<Atom_>::write_filtration_file(const char *fname, bool use_ids) const
+void VoronoiComplex<Atom_>::write_filtration_file(const char *fname, Index n, bool use_ids) const
 {
     FILE *f;
 
@@ -624,12 +624,12 @@ void VoronoiComplex<Atom_>::write_filtration_file(const char *fname, bool use_id
     {
         if (use_ids)
         {
-            fprintf(f, "%f\t%lld\t%d\n", s.value, s.getid(), static_cast<int>(s.interior));
+            fprintf(f, "%f\t%lld\t%lld\t%d\n", s.value, s.getid(), n, static_cast<int>(s.interior));
         }
         else
         {
             std::string st = s.repr(universe_point_count);
-            fprintf(f, "%f\t%s\t%d\n", s.value, st.c_str(), static_cast<int>(s.interior));
+            fprintf(f, "%f\t%s\t%lld\t%d\n", s.value, st.c_str(), n, static_cast<int>(s.interior));
         }
     }
 

@@ -40,6 +40,7 @@ using Real = float;
 using IndexVector = std::vector<Index>;
 using RealVector = std::vector<Real>;
 using IndexSet = std::unordered_set<Index>;
+using IndexMap = std::unordered_map<Index, Index>;
 
 using IndexVectorVector = std::vector<IndexVector>;
 using RealVectorVector = std::vector<RealVector>;

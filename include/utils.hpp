@@ -1,3 +1,21 @@
+template <class Iter>
+std::string container_repr(Iter first, Iter last)
+{
+    std::stringstream ss;
+    ss << "[";
+
+    while (first != last)
+    {
+        ss << *first;
+        first++;
+
+        if (first != last) ss << ", ";
+    }
+
+    ss << "]";
+    return ss.str();
+}
+
 void selection_sample(Index range, Index size, IndexVector& sample, int seed)
 {
     /*

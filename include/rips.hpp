@@ -18,6 +18,8 @@ Simplex::Simplex(const IndexVector& verts) : interior(0)
     id = static_cast<Index>(uid | (p << 60));
 }
 
+Simplex::Simplex(Index id, Real value, int interior) : id(id), value(value), interior(interior) {}
+
 Index Simplex::getid() const
 {
     return id;
@@ -38,6 +40,16 @@ Index Simplex::getdim() const
     _dim = (_id >> 60) & 0xF;
 
     return _dim;
+}
+
+Real Simplex::getvalue() const
+{
+    return value;
+}
+
+int Simplex::getinterior() const
+{
+    return interior;
 }
 
 IndexVector Simplex::getverts(Index n) const

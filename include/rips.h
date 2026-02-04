@@ -11,10 +11,13 @@ struct Simplex
     Simplex();
     Simplex(Index id);
     Simplex(const IndexVector& verts);
+    Simplex(Index id, Real value, int interior);
 
     Index getid() const;
     Index getuid() const;
     Index getdim() const;
+    Real getvalue() const;
+    int getinterior() const;
 
     IndexVector getverts(Index n) const;
     void get_facets(std::vector<Simplex>& facets, Index n) const;

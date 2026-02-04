@@ -99,7 +99,7 @@ class VoronoiComplex
         template <class Distance>
         void build_filtration(Distance& distance, Real radius, Index maxdim, Real cover, Index leaf_size);
 
-        void write_filtration_file(const char *fname, bool use_ids) const;
+        void write_filtration_file(const char *fname, Index n, bool use_ids) const;
 
     private:
 

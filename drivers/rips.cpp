@@ -218,7 +218,7 @@ int main_mpi(int argc, char *argv[])
             std::stringstream ss;
             ss << outfile << ".rank" << myrank << ".cell" << i << ".txt";
             std::string s = ss.str();
-            complexes[i].write_filtration_file(s.c_str(), use_ids);
+            complexes[i].write_filtration_file(s.c_str(), size, use_ids);
         }
 
         mytime += MPI_Wtime();
