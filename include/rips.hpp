@@ -1,4 +1,3 @@
-
 Simplex::Simplex() : id(0), interior(0) {}
 
 Simplex::Simplex(Index id) : id(id), interior(0) {}
@@ -111,22 +110,19 @@ void Simplex::get_facet_ids(IndexVector& ids, Index n) const
     }
 }
 
-void Simplex::reindex(const IndexVector& indices, Index n)
+inline bool operator<(const Simplex& lhs, const Simplex& rhs)
 {
-    IndexVector verts = getverts(n);
-    for (Index& v : verts) v = indices[v];
+    return (std::tie(lhs.value, lhs.id) < std::tie(rhs.value, rhs.id));
+}
 
-    std::sort(verts.begin(), verts.end());
+inline bool operator==(const Simplex& lhs, const Simplex& rhs)
+{
+    return (lhs.id == rhs.id);
+}
 
-    uint64_t p = verts.size()-1;
-    uint64_t uid = 0;
-
-    for (Index i = p; i >= 0; --i)
-    {
-        uid += binom(verts[i], i+1);
-    }
-
-    id = static_cast<Index>(uid | (p << 60));
+inline bool operator!=(const Simplex& lhs, const Simplex& rhs)
+{
+    return (lhs.id != rhs.id);
 }
 
 std::string Simplex::repr(Index n) const
@@ -144,4 +140,22 @@ std::string Simplex::repr(Index n) const
 
     ss << verts[size-1] << ">";
     return ss.str();
+}
+
+void Simplex::reindex(const IndexVector& indices, Index n)
+{
+    IndexVector verts = getverts(n);
+    for (Index& v : verts) v = indices[v];
+
+    std::sort(verts.begin(), verts.end());
+
+    uint64_t p = verts.size()-1;
+    uint64_t uid = 0;
+
+    for (Index i = p; i >= 0; --i)
+    {
+        uid += binom(verts[i], i+1);
+    }
+
+    id = static_cast<Index>(uid | (p << 60));
 }

@@ -10,12 +10,12 @@ class Graph
         Graph(const EdgeVector& myedges, Index num_verts);
 
         Index my_num_edges() const;
-        Index num_vertices() const { return num_verts; }
+        inline Index num_vertices() const;
 
         void write_file(const char *fname, MPI_Comm comm) const;
         void redistribute_edges(MPI_Comm comm);
 
-        Edge operator[](Index i) const { return myedges[i]; }
+        inline Edge operator[](Index i) const;
 
     private:
 

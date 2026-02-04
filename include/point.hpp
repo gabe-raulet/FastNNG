@@ -19,28 +19,6 @@ PointContainer<Atom_>::PointContainer(const AtomVector& atoms, const IndexVector
 }
 
 template <class Atom_>
-PointContainer<Atom_>::PointContainer(const PointContainer& lhs, const PointContainer& rhs) : data(lhs.num_atoms() + rhs.num_atoms()), offsets(lhs.num_points() + rhs.num_points() + 1)
-{
-    auto it = data.begin();
-
-    it = std::copy(lhs.data.begin(), lhs.data.end(), it);
-    it = std::copy(rhs.data.begin(), rhs.data.end(), it);
-
-    Index left_count = lhs.num_points();
-    Index right_count = rhs.num_points();
-
-    for (Index i = 0; i < left_count; ++i)
-    {
-        offsets[i] = lhs.offsets[i];
-    }
-
-    for (Index i = 0; i <= right_count; ++i)
-    {
-        offsets[i+left_count] = rhs.offsets[i] + lhs.offsets[left_count];
-    }
-}
-
-template <class Atom_>
 PointContainer<Atom_>::PointContainer(const AtomVector& atoms, Index size, Index dim) : data(atoms), offsets(size+1)
 {
     Index disp = 0;
@@ -75,6 +53,28 @@ PointContainer<Atom_>::PointContainer(const std::vector<const Atom*>& atoms, con
 }
 
 template <class Atom_>
+PointContainer<Atom_>::PointContainer(const PointContainer& lhs, const PointContainer& rhs) : data(lhs.num_atoms() + rhs.num_atoms()), offsets(lhs.num_points() + rhs.num_points() + 1)
+{
+    auto it = data.begin();
+
+    it = std::copy(lhs.data.begin(), lhs.data.end(), it);
+    it = std::copy(rhs.data.begin(), rhs.data.end(), it);
+
+    Index left_count = lhs.num_points();
+    Index right_count = rhs.num_points();
+
+    for (Index i = 0; i < left_count; ++i)
+    {
+        offsets[i] = lhs.offsets[i];
+    }
+
+    for (Index i = 0; i <= right_count; ++i)
+    {
+        offsets[i+left_count] = rhs.offsets[i] + lhs.offsets[left_count];
+    }
+}
+
+template <class Atom_>
 Index PointContainer<Atom_>::num_points() const
 {
     return offsets.size()-1;
@@ -96,14 +96,6 @@ template <class Atom_>
 Index PointContainer<Atom_>::size(Index i) const
 {
     return offsets[i+1]-offsets[i];
-}
-
-
-template <class Atom_>
-void PointContainer<Atom_>::push_back(const Atom* point_mem, Index point_size)
-{
-    std::copy(point_mem, point_mem+point_size, std::back_inserter(data));
-    offsets.push_back(data.size());
 }
 
 template <class Atom_>
@@ -157,6 +149,89 @@ Index PointContainer<Atom_>::read_fvecs(const char *fname)
 
     is.close();
     offsets[total] = disp;
+
+    return total;
+}
+
+template <class Atom_>
+Index PointContainer<Atom_>::read_fvecs(const char *fname, MPI_Comm comm)
+{
+    assert((std::same_as<Atom, float>));
+
+    int myrank, nprocs;
+    MPI_Comm_rank(comm, &myrank);
+    MPI_Comm_size(comm, &nprocs);
+
+    MPI_File fh;
+    MPI_Aint extent;
+    MPI_Offset filesize, filedisp;
+    Index total, myleft, mysize;
+    int dim;
+
+    MPI_Datatype MPI_POINT;
+    MPI_Datatype MPI_ATOM = MPI_FLOAT;
+
+    MPI_File_open(comm, fname, MPI_MODE_RDONLY, MPI_INFO_NULL, &fh);
+
+    if (!myrank)
+    {
+        MPI_File_get_size(fh, &filesize);
+        MPI_File_read(fh, &dim, 1, MPI_INT, MPI_STATUS_IGNORE);
+    }
+
+    MPI_Bcast(&dim, 1, MPI_INT, 0, comm);
+    MPI_Bcast(&filesize, 1, MPI_OFFSET, 0, comm);
+
+    extent = 4 * (dim + 1);
+    total = filesize / extent;
+
+    assert((filesize % extent == 0));
+
+    mysize = total / nprocs;
+    myleft = total % nprocs;
+
+    if (myrank < myleft)
+        mysize++;
+
+    IndexVector sizes(nprocs);
+    sizes[myrank] = mysize;
+
+    MPI_Allgather(MPI_IN_PLACE, 1, MPI_INDEX, sizes.data(), 1, MPI_INDEX, comm);
+
+    Index totsize;
+    Index myoffset;
+
+    MPI_Allreduce(&mysize, &totsize, 1, MPI_INDEX, MPI_SUM, comm);
+    MPI_Exscan(&mysize, &myoffset, 1, MPI_INDEX, MPI_SUM, comm);
+    if (!myrank) myoffset = 0;
+
+    data.resize(mysize*dim);
+    offsets.resize(mysize+1);
+
+    assert((dim >= 1));
+    MPI_Type_contiguous(dim, MPI_ATOM, &MPI_POINT);
+    MPI_Type_commit(&MPI_POINT);
+
+    MPI_Datatype filetype;
+    MPI_Type_create_resized(MPI_POINT, 0, extent, &filetype);
+    MPI_Type_commit(&filetype);
+
+    filedisp = myoffset*extent + sizeof(int);
+    MPI_File_set_view(fh, filedisp, MPI_POINT, filetype, "native", MPI_INFO_NULL);
+
+    MPI_File_read(fh, data.data(), (int)mysize, MPI_POINT, MPI_STATUS_IGNORE);
+    MPI_File_close(&fh);
+
+    MPI_Type_free(&filetype);
+    MPI_Type_free(&MPI_POINT);
+
+    Index disp = 0;
+
+    for (Index i = 0; i <= mysize; ++i)
+    {
+        offsets[i] = disp;
+        disp += dim;
+    }
 
     return total;
 }
@@ -267,86 +342,15 @@ Index PointContainer<Atom_>::read_seqs(const char *fname, MPI_Comm comm)
 }
 
 template <class Atom_>
-Index PointContainer<Atom_>::read_fvecs(const char *fname, MPI_Comm comm)
+typename PointContainer<Atom_>::AtomVector& PointContainer<Atom_>::getdata()
 {
-    assert((std::same_as<Atom, float>));
+    return data;
+}
 
-    int myrank, nprocs;
-    MPI_Comm_rank(comm, &myrank);
-    MPI_Comm_size(comm, &nprocs);
-
-    MPI_File fh;
-    MPI_Aint extent;
-    MPI_Offset filesize, filedisp;
-    Index total, myleft, mysize;
-    int dim;
-
-    MPI_Datatype MPI_POINT;
-    MPI_Datatype MPI_ATOM = MPI_FLOAT;
-
-    MPI_File_open(comm, fname, MPI_MODE_RDONLY, MPI_INFO_NULL, &fh);
-
-    if (!myrank)
-    {
-        MPI_File_get_size(fh, &filesize);
-        MPI_File_read(fh, &dim, 1, MPI_INT, MPI_STATUS_IGNORE);
-    }
-
-    MPI_Bcast(&dim, 1, MPI_INT, 0, comm);
-    MPI_Bcast(&filesize, 1, MPI_OFFSET, 0, comm);
-
-    extent = 4 * (dim + 1);
-    total = filesize / extent;
-
-    assert((filesize % extent == 0));
-
-    mysize = total / nprocs;
-    myleft = total % nprocs;
-
-    if (myrank < myleft)
-        mysize++;
-
-    IndexVector sizes(nprocs);
-    sizes[myrank] = mysize;
-
-    MPI_Allgather(MPI_IN_PLACE, 1, MPI_INDEX, sizes.data(), 1, MPI_INDEX, comm);
-
-    Index totsize;
-    Index myoffset;
-
-    MPI_Allreduce(&mysize, &totsize, 1, MPI_INDEX, MPI_SUM, comm);
-    MPI_Exscan(&mysize, &myoffset, 1, MPI_INDEX, MPI_SUM, comm);
-    if (!myrank) myoffset = 0;
-
-    data.resize(mysize*dim);
-    offsets.resize(mysize+1);
-
-    assert((dim >= 1));
-    MPI_Type_contiguous(dim, MPI_ATOM, &MPI_POINT);
-    MPI_Type_commit(&MPI_POINT);
-
-    MPI_Datatype filetype;
-    MPI_Type_create_resized(MPI_POINT, 0, extent, &filetype);
-    MPI_Type_commit(&filetype);
-
-    filedisp = myoffset*extent + sizeof(int);
-    MPI_File_set_view(fh, filedisp, MPI_POINT, filetype, "native", MPI_INFO_NULL);
-
-    MPI_File_read(fh, data.data(), (int)mysize, MPI_POINT, MPI_STATUS_IGNORE);
-    MPI_File_close(&fh);
-
-    MPI_Type_free(&filetype);
-    MPI_Type_free(&MPI_POINT);
-
-    Index disp = 0;
-
-    for (Index i = 0; i <= mysize; ++i)
-    {
-        offsets[i] = disp;
-        disp += dim;
-    }
-
-    return total;
+template <class Atom_>
+IndexVector& PointContainer<Atom_>::getoffsets()
+{
+    return offsets;
 }
 
 template <class Atom_>
@@ -428,6 +432,268 @@ void PointContainer<Atom_>::allgather(const PointContainer& mypoints, MPI_Comm c
     offsets.push_back(offsets.back() + recvbuf_sizes.back());
 
     assert((offsets.back() == recvbuf_atoms.size()));
+}
+
+template <class Atom_>
+void PointContainer<Atom_>::push_back(const Atom* point_mem, Index point_size)
+{
+    std::copy(point_mem, point_mem+point_size, std::back_inserter(data));
+    offsets.push_back(data.size());
+}
+
+template <class Atom_>
+VoronoiCell<Atom_>::VoronoiCell(const PointContainerType& points, const IndexVector& global_indices, const RealVector& dist_to_centers)
+    : PointContainerType(points),
+      global_indices(global_indices),
+      dist_to_centers(dist_to_centers),
+      interior(points.num_points(), false) {}
+
+template <class Atom_>
+Index VoronoiCell<Atom_>::index(Index i) const
+{
+    return global_indices[i];
+}
+
+template <class Atom_>
+Real VoronoiCell<Atom_>::dist_to_center(Index i) const
+{
+    return dist_to_centers[i];
+}
+
+template <class Atom_>
+Index VoronoiCell<Atom_>::num_ghosts() const
+{
+    return ghost_points.num_points();
+}
+
+template <class Atom_>
+Index VoronoiCell<Atom_>::ghost_index(Index i) const
+{
+    return global_ghost_indices[i];
+}
+
+template <class Atom_>
+Index VoronoiCell<Atom_>::ghost_size(Index i) const
+{
+    return ghost_points.size(i);
+}
+
+template <class Atom_>
+const typename VoronoiCell<Atom_>::Atom* VoronoiCell<Atom_>::ghost_mem(Index i) const
+{
+    return ghost_points.mem(i);
+}
+
+template <class Atom_>
+typename IndexVector::const_iterator VoronoiCell<Atom_>::ids_begin() const
+{
+    return global_indices.cbegin();
+}
+
+template <class Atom_>
+typename IndexVector::const_iterator VoronoiCell<Atom_>::ids_end() const
+{
+    return global_indices.cend();
+}
+
+template <class Atom_>
+void VoronoiCell<Atom_>::add_ghost_point(const Atom *point_mem, Index point_size, Index point_index)
+{
+    ghost_points.push_back(point_mem, point_size);
+    global_ghost_indices.push_back(point_index);
+}
+
+template <class Atom_>
+template <class Distance>
+void VoronoiCell<Atom_>::find_neighbors(Real cover, Index leaf_size, Distance& distance, Real radius, EdgeVector& myedges) const
+{
+    CoverTree tree(cover, leaf_size);
+    tree.build(*this, distance);
+
+    auto functor = [&](Index neighbor, Index query, Real weight)
+    {
+        myedges.emplace_back(global_indices[neighbor], global_indices[query], weight);
+    };
+
+    auto ghost_functor = [&](Index neighbor, Index query, Real weight)
+    {
+        myedges.emplace_back(global_indices[neighbor], global_ghost_indices[query], weight);
+    };
+
+    tree.radius_query_batched(*this, distance, *this, radius, functor);
+    tree.radius_query_batched(*this, distance, ghost_points, radius, ghost_functor);
+}
+
+template <class Atom_>
+void VoronoiCell<Atom_>::set_interior(Index i)
+{
+    interior[i] = true;
+}
+
+template <class Atom_>
+const typename VoronoiCell<Atom_>::PointContainerType VoronoiCell<Atom_>::ghosts() const
+{
+    return ghost_points;
+}
+
+template <class Atom_>
+const std::vector<bool> VoronoiCell<Atom_>::interiors() const
+{
+    return interior;
+}
+
+template <class Atom_>
+VoronoiComplex<Atom_>::VoronoiComplex(const VoronoiCellType& cell, Index universe_point_count) : points(cell, cell.ghosts()), indices(cell.num_points() + cell.num_ghosts()), interior(cell.interiors()), local(cell.num_points()), total(cell.num_points() + cell.num_ghosts()), universe_point_count(universe_point_count)
+{
+    Index point_count = cell.num_points();
+    Index ghost_count = cell.num_ghosts();
+
+    for (Index i = 0; i < point_count; ++i)
+    {
+        indices[i] = cell.index(i);
+    }
+
+    for (Index i = 0; i < ghost_count; ++i)
+    {
+        indices[i+point_count] = cell.ghost_index(i);
+    }
+}
+
+template <class Atom_>
+template <class Distance>
+void VoronoiComplex<Atom_>::build_filtration(Distance& distance, Real radius, Index maxdim, Real cover, Index leaf_size)
+{
+    CoverTree tree(cover, leaf_size);
+    tree.build(points, distance);
+
+    NeighborListVector graph(total);
+    NeighborListVector weights(maxdim+1);
+
+    auto query_functor = [&](Index neighbor, Index query, Real weight)
+    {
+        graph[neighbor].insert({query, weight});
+    };
+
+    tree.radius_query_batched(points, distance, points, radius, query_functor);
+
+    IndexVector current;
+    IndexVector candidates(total);
+
+    std::iota(candidates.begin(), candidates.end(), (Index)0);
+
+    bron_kerbosch(current, candidates, -1, graph, weights, maxdim);
+
+    for (Index p = 2; p <= maxdim; ++p)
+    {
+        for (auto& [id, weight] : weights[p])
+        {
+            weight = 0;
+            Simplex sigma(id);
+
+            IndexVector facet_ids;
+            sigma.get_facet_ids(facet_ids, total);
+
+            for (Index facet_id : facet_ids)
+            {
+                weight = std::max(weight, weights[p-1][facet_id]);
+            }
+        }
+    }
+
+    for (auto& s : simplices)
+    {
+        Index id = s.getid();
+        Index dim = s.getdim();
+
+        s.value = weights[dim][id];
+
+        s.reindex(indices, universe_point_count);
+    }
+
+    std::sort(simplices.begin(), simplices.end());
+}
+
+template <class Atom_>
+void VoronoiComplex<Atom_>::write_filtration_file(const char *fname, bool use_ids) const
+{
+    FILE *f;
+
+    f = fopen(fname, "w");
+
+    for (const auto& s : simplices)
+    {
+        if (use_ids)
+        {
+            fprintf(f, "%f\t%lld\t%d\n", s.value, s.getid(), static_cast<int>(s.interior));
+        }
+        else
+        {
+            std::string st = s.repr(universe_point_count);
+            fprintf(f, "%f\t%s\t%d\n", s.value, st.c_str(), static_cast<int>(s.interior));
+        }
+    }
+
+    fclose(f);
+}
+
+template <class Atom_>
+void VoronoiComplex<Atom_>::bron_kerbosch(IndexVector& current, const IndexVector& cands, Index excluded, const NeighborListVector& graph, NeighborListVector& weights, Index maxdim)
+{
+    if (!current.empty())
+    {
+        bool is_interior = false;
+
+        for (auto& v : current)
+        {
+            if (interior[v])
+            {
+                is_interior = true;
+                break;
+            }
+        }
+
+        Index p = current.size()-1;
+        simplices.emplace_back(current);
+
+        if (is_interior) simplices.back().interior = 1;
+
+        const Simplex& sigma = simplices.back();
+
+        if (p == 0) weights[0].insert({sigma.getid(), 0.});
+        else if (p == 1) weights[1].insert({sigma.getid(), graph[current[0]].find(current[1])->second});
+        else weights[p].insert({sigma.getid(), 0.});
+    }
+
+    if (current.size() == static_cast<size_t>(maxdim) + 1)
+        return;
+
+    Index m = cands.size();
+
+    for (Index j = excluded+1; j < m; ++j)
+    {
+        current.push_back(cands[j]);
+
+        IndexVector new_cands;
+
+        for (Index i = 0; i < j; ++i)
+        {
+            if (graph[cands[i]].find(cands[j]) != graph[cands[i]].end())
+                new_cands.push_back(cands[i]);
+        }
+
+        Index ex = new_cands.size();
+
+        for (Index i = j+1; i < m; ++i)
+        {
+            if (graph[cands[i]].find(cands[j]) != graph[cands[i]].end())
+                new_cands.push_back(cands[i]);
+        }
+
+        excluded = ex-1;
+
+        bron_kerbosch(current, new_cands, excluded, graph, weights, maxdim);
+        current.pop_back();
+    }
 }
 
 template <class Atom_>
@@ -656,20 +922,6 @@ void VoronoiDiagram<Atom_>::coalesce_cells(const PointContainerType& mypoints, s
 
         mycells.emplace_back(PointContainerType(pts, point_sizes), indices, dists);
     }
-}
-
-template <class Atom_>
-VoronoiCell<Atom_>::VoronoiCell(const PointContainerType& points, const IndexVector& global_indices, const RealVector& dist_to_centers)
-    : PointContainerType(points),
-      global_indices(global_indices),
-      dist_to_centers(dist_to_centers),
-      interior(points.num_points(), false) {}
-
-template <class Atom_>
-void VoronoiCell<Atom_>::add_ghost_point(const Atom *point_mem, Index point_size, Index point_index)
-{
-    ghost_points.push_back(point_mem, point_size);
-    global_ghost_indices.push_back(point_index);
 }
 
 template <class Atom_>
@@ -1058,180 +1310,4 @@ void VoronoiDiagram<Atom_>::add_ghost_points_systolic_rips(std::vector<VoronoiCe
             }
         }
     }
-}
-
-template <class Atom_>
-template <class Distance>
-void VoronoiCell<Atom_>::find_neighbors(Real cover, Index leaf_size, Distance& distance, Real radius, EdgeVector& myedges) const
-{
-    CoverTree tree(cover, leaf_size);
-    tree.build(*this, distance);
-
-    auto functor = [&](Index neighbor, Index query, Real weight)
-    {
-        myedges.emplace_back(global_indices[neighbor], global_indices[query], weight);
-    };
-
-    auto ghost_functor = [&](Index neighbor, Index query, Real weight)
-    {
-        myedges.emplace_back(global_indices[neighbor], global_ghost_indices[query], weight);
-    };
-
-    tree.radius_query_batched(*this, distance, *this, radius, functor);
-    tree.radius_query_batched(*this, distance, ghost_points, radius, ghost_functor);
-}
-
-
-template <class Atom_>
-VoronoiComplex<Atom_>::VoronoiComplex(const VoronoiCellType& cell, Index universe_point_count) : points(cell, cell.ghosts()), indices(cell.num_points() + cell.num_ghosts()), interior(cell.interiors()), local(cell.num_points()), total(cell.num_points() + cell.num_ghosts()), universe_point_count(universe_point_count)
-{
-    Index point_count = cell.num_points();
-    Index ghost_count = cell.num_ghosts();
-
-    for (Index i = 0; i < point_count; ++i)
-    {
-        indices[i] = cell.index(i);
-    }
-
-    for (Index i = 0; i < ghost_count; ++i)
-    {
-        indices[i+point_count] = cell.ghost_index(i);
-    }
-}
-
-template <class Atom_>
-void VoronoiComplex<Atom_>::bron_kerbosch(IndexVector& current, const IndexVector& cands, Index excluded, const NeighborListVector& graph, NeighborListVector& weights, Index maxdim)
-{
-    if (!current.empty())
-    {
-        bool is_interior = false;
-
-        for (auto& v : current)
-        {
-            if (interior[v])
-            {
-                is_interior = true;
-                break;
-            }
-        }
-
-        Index p = current.size()-1;
-        simplices.emplace_back(current);
-
-        if (is_interior) simplices.back().interior = 1;
-
-        const Simplex& sigma = simplices.back();
-
-        if (p == 0) weights[0].insert({sigma.getid(), 0.});
-        else if (p == 1) weights[1].insert({sigma.getid(), graph[current[0]].find(current[1])->second});
-        else weights[p].insert({sigma.getid(), 0.});
-    }
-
-    if (current.size() == static_cast<size_t>(maxdim) + 1)
-        return;
-
-    Index m = cands.size();
-
-    for (Index j = excluded+1; j < m; ++j)
-    {
-        current.push_back(cands[j]);
-
-        IndexVector new_cands;
-
-        for (Index i = 0; i < j; ++i)
-        {
-            if (graph[cands[i]].find(cands[j]) != graph[cands[i]].end())
-                new_cands.push_back(cands[i]);
-        }
-
-        Index ex = new_cands.size();
-
-        for (Index i = j+1; i < m; ++i)
-        {
-            if (graph[cands[i]].find(cands[j]) != graph[cands[i]].end())
-                new_cands.push_back(cands[i]);
-        }
-
-        excluded = ex-1;
-
-        bron_kerbosch(current, new_cands, excluded, graph, weights, maxdim);
-        current.pop_back();
-    }
-}
-
-template <class Atom_>
-template <class Distance>
-void VoronoiComplex<Atom_>::build_filtration(Distance& distance, Real radius, Index maxdim, Real cover, Index leaf_size)
-{
-    CoverTree tree(cover, leaf_size);
-    tree.build(points, distance);
-
-    NeighborListVector graph(total);
-    NeighborListVector weights(maxdim+1);
-
-    auto query_functor = [&](Index neighbor, Index query, Real weight)
-    {
-        graph[neighbor].insert({query, weight});
-    };
-
-    tree.radius_query_batched(points, distance, points, radius, query_functor);
-
-    IndexVector current;
-    IndexVector candidates(total);
-
-    std::iota(candidates.begin(), candidates.end(), (Index)0);
-
-    bron_kerbosch(current, candidates, -1, graph, weights, maxdim);
-
-    for (Index p = 2; p <= maxdim; ++p)
-    {
-        for (auto& [id, weight] : weights[p])
-        {
-            weight = 0;
-            Simplex sigma(id);
-
-            IndexVector facet_ids;
-            sigma.get_facet_ids(facet_ids, total);
-
-            for (Index facet_id : facet_ids)
-            {
-                weight = std::max(weight, weights[p-1][facet_id]);
-            }
-        }
-    }
-
-    for (auto& s : simplices)
-    {
-        Index id = s.getid();
-        Index dim = s.getdim();
-
-        s.value = weights[dim][id];
-
-        s.reindex(indices, universe_point_count);
-    }
-
-    std::sort(simplices.begin(), simplices.end());
-}
-
-template <class Atom_>
-void VoronoiComplex<Atom_>::write_filtration_file(const char *fname, bool use_ids) const
-{
-    FILE *f;
-
-    f = fopen(fname, "w");
-
-    for (const auto& s : simplices)
-    {
-        if (use_ids)
-        {
-            fprintf(f, "%f\t%lld\t%d\n", s.value, s.getid(), static_cast<int>(s.interior));
-        }
-        else
-        {
-            std::string st = s.repr(universe_point_count);
-            fprintf(f, "%f\t%s\t%d\n", s.value, st.c_str(), static_cast<int>(s.interior));
-        }
-    }
-
-    fclose(f);
 }

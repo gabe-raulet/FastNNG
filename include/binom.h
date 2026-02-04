@@ -16,7 +16,7 @@ class Binom
 
         using Memo = std::unordered_map<Pair, Index, HashPair>;
 
-        Binom() {}
+        inline Binom();
 
         Index operator()(Index n, Index k);
 

@@ -30,8 +30,8 @@ class PointContainer
         Index read_seqs(const char *fname);
         Index read_seqs(const char *fname, MPI_Comm comm);
 
-        AtomVector& getdata() { return data; }
-        IndexVector& getoffsets() { return offsets; }
+        AtomVector& getdata();
+        IndexVector& getoffsets();
 
         void localgather(const PointContainer& points, const IndexVector& local_indices);
         void allgather(const PointContainer& mypoints, MPI_Comm comm);
@@ -55,26 +55,26 @@ class VoronoiCell : public PointContainer<Atom_>
 
         VoronoiCell(const PointContainerType& points, const IndexVector& global_indices, const RealVector& dist_to_centers);
 
-        Index index(Index i) const { return global_indices[i]; }
-        Real dist_to_center(Index i) const { return dist_to_centers[i]; }
+        Index index(Index i) const;
+        Real dist_to_center(Index i) const;
 
-        Index num_ghosts() const { return ghost_points.num_points(); }
-        Index ghost_index(Index i) const { return global_ghost_indices[i]; }
-        Index ghost_size(Index i) const { return ghost_points.size(i); }
-        const Atom* ghost_mem(Index i) const { return ghost_points.mem(i); }
+        Index num_ghosts() const;
+        Index ghost_index(Index i) const;
+        Index ghost_size(Index i) const;
+        const Atom* ghost_mem(Index i) const;
 
-        typename IndexVector::const_iterator ids_begin() const { return global_indices.cbegin(); }
-        typename IndexVector::const_iterator ids_end() const { return global_indices.cend(); }
+        typename IndexVector::const_iterator ids_begin() const;
+        typename IndexVector::const_iterator ids_end() const;
 
         void add_ghost_point(const Atom *point_mem, Index point_size, Index point_index);
 
         template <class Distance>
         void find_neighbors(Real cover, Index leaf_size, Distance& distance, Real radius, EdgeVector& myedges) const;
 
-        void set_interior(Index i) { interior[i] = true; }
+        void set_interior(Index i);
 
-        const PointContainerType ghosts() const { return ghost_points; }
-        const std::vector<bool> interiors() const { return interior; }
+        const PointContainerType ghosts() const;
+        const std::vector<bool> interiors() const;
 
     private:
 

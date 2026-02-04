@@ -256,47 +256,6 @@ Index CoverTree::radius_query(const PointContainer<Atom>& points, Distance& dist
     return found;
 }
 
-template <class Atom, class Distance>
-bool CoverTree::has_radius_neighbor(const PointContainer<Atom>& points, Distance& distance, const Atom* query, Index dim, Real radius) const
-{
-    if (points.num_points() == 0)
-        return false;
-
-    std::deque<Index> queue = {0};
-
-    while (!queue.empty())
-    {
-        Index u = queue.front(); queue.pop_front();
-
-        auto first = child_begin(u);
-        auto last = child_end(u);
-
-        if (first == last)
-        {
-            Index leaf = centers[u];
-            Real dist = distance(points.mem(leaf), query, points.size(leaf), dim);
-
-            if (dist <= radius)
-            {
-                return true;
-            }
-        }
-        else
-        {
-            for (; first != last; ++first)
-            {
-                Index child = *first;
-                Real epsilon = radii[child] + radius;
-
-                if (distance(points.mem(centers[child]), query, points.size(centers[child]), dim) <= epsilon)
-                    queue.push_back(child);
-            }
-        }
-    }
-
-    return false;
-}
-
 template <class Atom, class Distance, class Functor>
 Index CoverTree::radius_query_batched(const PointContainer<Atom>& points, Distance& distance, const PointContainer<Atom>& queries, Real radius, const Functor& functor) const
 {
@@ -365,6 +324,47 @@ Index CoverTree::radius_query_batched(const PointContainer<Atom>& points, Distan
     }
 
     return found;
+}
+
+template <class Atom, class Distance>
+bool CoverTree::has_radius_neighbor(const PointContainer<Atom>& points, Distance& distance, const Atom* query, Index dim, Real radius) const
+{
+    if (points.num_points() == 0)
+        return false;
+
+    std::deque<Index> queue = {0};
+
+    while (!queue.empty())
+    {
+        Index u = queue.front(); queue.pop_front();
+
+        auto first = child_begin(u);
+        auto last = child_end(u);
+
+        if (first == last)
+        {
+            Index leaf = centers[u];
+            Real dist = distance(points.mem(leaf), query, points.size(leaf), dim);
+
+            if (dist <= radius)
+            {
+                return true;
+            }
+        }
+        else
+        {
+            for (; first != last; ++first)
+            {
+                Index child = *first;
+                Real epsilon = radii[child] + radius;
+
+                if (distance(points.mem(centers[child]), query, points.size(centers[child]), dim) <= epsilon)
+                    queue.push_back(child);
+            }
+        }
+    }
+
+    return false;
 }
 
 typename IndexVector::const_iterator CoverTree::child_begin(Index vertex) const

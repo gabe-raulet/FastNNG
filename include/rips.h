@@ -24,9 +24,9 @@ struct Simplex
     Real value;
     int interior;
 
-    friend bool operator<(const Simplex& lhs, const Simplex& rhs) { return (std::tie(lhs.value, lhs.id) < std::tie(rhs.value, rhs.id)); }
-    friend bool operator==(const Simplex& lhs, const Simplex& rhs) { return (lhs.id == rhs.id); }
-    friend bool operator!=(const Simplex& lhs, const Simplex& rhs) { return (lhs.id != rhs.id); }
+    friend bool operator<(const Simplex& lhs, const Simplex& rhs);
+    friend bool operator==(const Simplex& lhs, const Simplex& rhs);
+    friend bool operator!=(const Simplex& lhs, const Simplex& rhs);
 
     std::string repr(Index n) const;
 
