@@ -33,23 +33,6 @@ struct Simplex
     void reindex(const IndexVector& indices, Index n);
 };
 
-/* class RipsComplex */
-/* { */
-    /* public: */
-
-        /* RipsComplex(const Graph& skeleton, Index maxdim); */
-
-    /* private: */
-
-        /* using NeighborList = std::unordered_map<Index, Real>; */
-        /* using NeighborListVector = std::vector<NeighborList>; */
-
-        /* Index num_vertices; */
-        /* std::vector<Simplex> simplices; */
-
-        /* void bron_kerbosch(IndexVector& current, const IndexVector& cands, Index excluded, const NeighborListVector& graph, NeighborListVector& weights, Index maxdim); */
-/* }; */
-
 #include "rips.hpp"
 
 #endif
