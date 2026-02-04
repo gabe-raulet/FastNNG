@@ -2,6 +2,7 @@
 #define POINT_H_
 
 #include "utils.h"
+#include "rips.h"
 
 template <class Atom_>
 class PointContainer
@@ -15,6 +16,7 @@ class PointContainer
         PointContainer(const AtomVector& atoms, const IndexVector& sizes);
         PointContainer(const AtomVector& atoms, Index size, Index dim);
         PointContainer(const std::vector<const Atom*>& atoms, const IndexVector& sizes);
+        PointContainer(const PointContainer& lhs, const PointContainer& rhs);
 
         Index num_points() const;
         Index num_atoms() const;
@@ -71,12 +73,47 @@ class VoronoiCell : public PointContainer<Atom_>
 
         void set_interior(Index i) { interior[i] = true; }
 
+        const PointContainerType ghosts() const { return ghost_points; }
+        const std::vector<bool> interiors() const { return interior; }
+
     private:
 
         PointContainerType ghost_points;
         IndexVector global_indices, global_ghost_indices;
         RealVector dist_to_centers;
         std::vector<bool> interior;
+};
+
+template <class Atom_>
+class VoronoiComplex
+{
+    public:
+
+        using Atom = Atom_;
+        using AtomVector = std::vector<Atom>;
+        using PointContainerType = PointContainer<Atom>;
+        using VoronoiCellType = VoronoiCell<Atom>;
+
+        VoronoiComplex(const VoronoiCellType& cell, Index universe_point_count);
+
+        template <class Distance>
+        void build_filtration(Distance& distance, Real radius, Index maxdim, Real cover, Index leaf_size);
+
+        void write_filtration_file(const char *fname, bool use_ids) const;
+
+    private:
+
+        using NeighborList = std::unordered_map<Index, Real>;
+        using NeighborListVector = std::vector<NeighborList>;
+
+        PointContainerType points;
+        IndexVector indices;
+        std::vector<bool> interior;
+        Index local, total, universe_point_count;
+
+        std::vector<Simplex> simplices;
+
+        void bron_kerbosch(IndexVector& current, const IndexVector& cands, Index excluded, const NeighborListVector& graph, NeighborListVector& weights, Index maxdim);
 };
 
 template <class Atom_>

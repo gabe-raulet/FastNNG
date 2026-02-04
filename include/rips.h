@@ -3,8 +3,6 @@
 
 #include "utils.h"
 #include "binom.h"
-#include "graph.h"
-#include "search.h"
 
 static Binom binom;
 
@@ -24,30 +22,33 @@ struct Simplex
 
     Index id;
     Real value;
+    int interior;
 
     friend bool operator<(const Simplex& lhs, const Simplex& rhs) { return (std::tie(lhs.value, lhs.id) < std::tie(rhs.value, rhs.id)); }
     friend bool operator==(const Simplex& lhs, const Simplex& rhs) { return (lhs.id == rhs.id); }
     friend bool operator!=(const Simplex& lhs, const Simplex& rhs) { return (lhs.id != rhs.id); }
 
     std::string repr(Index n) const;
+
+    void reindex(const IndexVector& indices, Index n);
 };
 
-class RipsComplex
-{
-    public:
+/* class RipsComplex */
+/* { */
+    /* public: */
 
-        RipsComplex(const Graph& skeleton, Index maxdim);
+        /* RipsComplex(const Graph& skeleton, Index maxdim); */
 
-    private:
+    /* private: */
 
-        using NeighborList = std::unordered_map<Index, Real>;
-        using NeighborListVector = std::vector<NeighborList>;
+        /* using NeighborList = std::unordered_map<Index, Real>; */
+        /* using NeighborListVector = std::vector<NeighborList>; */
 
-        Index num_vertices;
-        std::vector<Simplex> simplices;
+        /* Index num_vertices; */
+        /* std::vector<Simplex> simplices; */
 
-        void bron_kerbosch(IndexVector& current, const IndexVector& cands, Index excluded, const NeighborListVector& graph, NeighborListVector& weights, Index maxdim);
-};
+        /* void bron_kerbosch(IndexVector& current, const IndexVector& cands, Index excluded, const NeighborListVector& graph, NeighborListVector& weights, Index maxdim); */
+/* }; */
 
 #include "rips.hpp"
 

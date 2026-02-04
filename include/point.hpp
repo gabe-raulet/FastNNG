@@ -19,6 +19,28 @@ PointContainer<Atom_>::PointContainer(const AtomVector& atoms, const IndexVector
 }
 
 template <class Atom_>
+PointContainer<Atom_>::PointContainer(const PointContainer& lhs, const PointContainer& rhs) : data(lhs.num_atoms() + rhs.num_atoms()), offsets(lhs.num_points() + rhs.num_points() + 1)
+{
+    auto it = data.begin();
+
+    it = std::copy(lhs.data.begin(), lhs.data.end(), it);
+    it = std::copy(rhs.data.begin(), rhs.data.end(), it);
+
+    Index left_count = lhs.num_points();
+    Index right_count = rhs.num_points();
+
+    for (Index i = 0; i < left_count; ++i)
+    {
+        offsets[i] = lhs.offsets[i];
+    }
+
+    for (Index i = 0; i <= right_count; ++i)
+    {
+        offsets[i+left_count] = rhs.offsets[i] + lhs.offsets[left_count];
+    }
+}
+
+template <class Atom_>
 PointContainer<Atom_>::PointContainer(const AtomVector& atoms, Index size, Index dim) : data(atoms), offsets(size+1)
 {
     Index disp = 0;
@@ -1057,4 +1079,159 @@ void VoronoiCell<Atom_>::find_neighbors(Real cover, Index leaf_size, Distance& d
 
     tree.radius_query_batched(*this, distance, *this, radius, functor);
     tree.radius_query_batched(*this, distance, ghost_points, radius, ghost_functor);
+}
+
+
+template <class Atom_>
+VoronoiComplex<Atom_>::VoronoiComplex(const VoronoiCellType& cell, Index universe_point_count) : points(cell, cell.ghosts()), indices(cell.num_points() + cell.num_ghosts()), interior(cell.interiors()), local(cell.num_points()), total(cell.num_points() + cell.num_ghosts()), universe_point_count(universe_point_count)
+{
+    Index point_count = cell.num_points();
+    Index ghost_count = cell.num_ghosts();
+
+    for (Index i = 0; i < point_count; ++i)
+    {
+        indices[i] = cell.index(i);
+    }
+
+    for (Index i = 0; i < ghost_count; ++i)
+    {
+        indices[i+point_count] = cell.ghost_index(i);
+    }
+}
+
+template <class Atom_>
+void VoronoiComplex<Atom_>::bron_kerbosch(IndexVector& current, const IndexVector& cands, Index excluded, const NeighborListVector& graph, NeighborListVector& weights, Index maxdim)
+{
+    if (!current.empty())
+    {
+        bool is_interior = false;
+
+        for (auto& v : current)
+        {
+            if (interior[v])
+            {
+                is_interior = true;
+                break;
+            }
+        }
+
+        Index p = current.size()-1;
+        simplices.emplace_back(current);
+
+        if (is_interior) simplices.back().interior = 1;
+
+        const Simplex& sigma = simplices.back();
+
+        if (p == 0) weights[0].insert({sigma.getid(), 0.});
+        else if (p == 1) weights[1].insert({sigma.getid(), graph[current[0]].find(current[1])->second});
+        else weights[p].insert({sigma.getid(), 0.});
+    }
+
+    if (current.size() == static_cast<size_t>(maxdim) + 1)
+        return;
+
+    Index m = cands.size();
+
+    for (Index j = excluded+1; j < m; ++j)
+    {
+        current.push_back(cands[j]);
+
+        IndexVector new_cands;
+
+        for (Index i = 0; i < j; ++i)
+        {
+            if (graph[cands[i]].find(cands[j]) != graph[cands[i]].end())
+                new_cands.push_back(cands[i]);
+        }
+
+        Index ex = new_cands.size();
+
+        for (Index i = j+1; i < m; ++i)
+        {
+            if (graph[cands[i]].find(cands[j]) != graph[cands[i]].end())
+                new_cands.push_back(cands[i]);
+        }
+
+        excluded = ex-1;
+
+        bron_kerbosch(current, new_cands, excluded, graph, weights, maxdim);
+        current.pop_back();
+    }
+}
+
+template <class Atom_>
+template <class Distance>
+void VoronoiComplex<Atom_>::build_filtration(Distance& distance, Real radius, Index maxdim, Real cover, Index leaf_size)
+{
+    CoverTree tree(cover, leaf_size);
+    tree.build(points, distance);
+
+    NeighborListVector graph(total);
+    NeighborListVector weights(maxdim+1);
+
+    auto query_functor = [&](Index neighbor, Index query, Real weight)
+    {
+        graph[neighbor].insert({query, weight});
+    };
+
+    tree.radius_query_batched(points, distance, points, radius, query_functor);
+
+    IndexVector current;
+    IndexVector candidates(total);
+
+    std::iota(candidates.begin(), candidates.end(), (Index)0);
+
+    bron_kerbosch(current, candidates, -1, graph, weights, maxdim);
+
+    for (Index p = 2; p <= maxdim; ++p)
+    {
+        for (auto& [id, weight] : weights[p])
+        {
+            weight = 0;
+            Simplex sigma(id);
+
+            IndexVector facet_ids;
+            sigma.get_facet_ids(facet_ids, total);
+
+            for (Index facet_id : facet_ids)
+            {
+                weight = std::max(weight, weights[p-1][facet_id]);
+            }
+        }
+    }
+
+    for (auto& s : simplices)
+    {
+        Index id = s.getid();
+        Index dim = s.getdim();
+
+        s.value = weights[dim][id];
+
+        s.reindex(indices, universe_point_count);
+    }
+
+    std::sort(simplices.begin(), simplices.end());
+}
+
+template <class Atom_>
+void VoronoiComplex<Atom_>::write_filtration_file(const char *fname, bool use_ids) const
+{
+    FILE *f;
+
+    f = fopen(fname, "w");
+
+    for (const auto& s : simplices)
+    {
+        if (use_ids)
+        {
+            fprintf(f, "%f\t%lld\t%d\n", s.value, s.getid(), static_cast<int>(s.interior));
+        }
+        else
+        {
+            std::string st = s.repr(universe_point_count);
+            fprintf(f, "%f\t%s\t%d\n", s.value, st.c_str(), static_cast<int>(s.interior));
+        }
+    }
+
+    fclose(f);
 }

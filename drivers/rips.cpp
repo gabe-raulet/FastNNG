@@ -28,6 +28,7 @@ Index num_centers = 1;
 Index maxdim = 3;
 int rng_seed = -1;
 int verbosity = 1;
+bool use_ids = true;
 
 template <class Atom>
 struct L2Distance
@@ -70,6 +71,7 @@ int main_mpi(int argc, char *argv[])
     using PointContainerType = PointContainer<Atom>;
     using VoronoiDiagramType = VoronoiDiagram<Atom>;
     using VoronoiCellType = VoronoiCell<Atom>;
+    using VoronoiComplexType = VoronoiComplex<Atom>;
     using AtomVector = std::vector<Atom>;
 
     using Edge = std::tuple<Index, Index, Real>;
@@ -180,68 +182,67 @@ int main_mpi(int argc, char *argv[])
         fflush(stdout);
     }
 
-    /* MPI_Barrier(comm); */
-    /* mytime = -MPI_Wtime(); */
-    /* mydistcomps = distance.distcomps; */
+    MPI_Barrier(comm);
+    mytime = -MPI_Wtime();
+    mydistcomps = distance.distcomps;
 
-    /* for (const VoronoiCellType& cell : mycells) */
-    /* { */
-        /* cell.find_neighbors(cover, leaf_size, distance, radius, myedges); */
-    /* } */
+    std::vector<VoronoiComplexType> complexes;
 
-    /* mytime += MPI_Wtime(); */
-    /* mydistcomps = distance.distcomps - mydistcomps; */
+    for (const VoronoiCellType& cell : mycells)
+    {
+        complexes.emplace_back(cell, size);
+        complexes.back().build_filtration(distance, radius, maxdim, cover, leaf_size);
+    }
 
-    /* if (verbosity >= 1) */
-    /* { */
-        /* MPI_Reduce(&mytime, &time, 1, MPI_DOUBLE, MPI_MAX, 0, comm); */
-        /* MPI_Reduce(&mydistcomps, &distcomps, 1, MPI_INDEX, MPI_SUM, 0, comm); */
+    mytime += MPI_Wtime();
+    mydistcomps = distance.distcomps - mydistcomps;
 
-        /* if (!myrank) fprintf(stderr, "[time=%.3f] found neighbors [distcomps=%s,avg_distcomps=%s]\n", time, LARGE(distcomps), LARGE(static_cast<Index>((distcomps+0.0)/nprocs))); */
-        /* fflush(stdout); */
-    /* } */
+    if (verbosity >= 1)
+    {
+        MPI_Reduce(&mytime, &time, 1, MPI_DOUBLE, MPI_MAX, 0, comm);
+        MPI_Reduce(&mydistcomps, &distcomps, 1, MPI_INDEX, MPI_SUM, 0, comm);
 
-    /* MPI_Barrier(comm); */
-    /* mytime = -MPI_Wtime(); */
+        if (!myrank) fprintf(stderr, "[time=%.3f] built complexes [distcomps=%s,avg_distcomps=%s]\n", time, LARGE(distcomps), LARGE(static_cast<Index>((distcomps+0.0)/nprocs)));
+        fflush(stdout);
+    }
 
-    /* Graph graph(myedges, size); */
-    /* graph.redistribute_edges(comm); */
+    if (outfile)
+    {
+        MPI_Barrier(comm);
+        mytime = -MPI_Wtime();
 
-    /* mytime += MPI_Wtime(); */
-    /* mytottime += MPI_Wtime(); */
-    /* mytotdistcomps = distance.distcomps; */
+        Index num_complexes = complexes.size();
 
-    /* if (verbosity >= 1) */
-    /* { */
-        /* Index num_edges; */
-        /* Index my_num_edges = graph.my_num_edges(); */
+        for (Index i = 0; i < num_complexes; ++i)
+        {
+            std::stringstream ss;
+            ss << outfile << ".rank" << myrank << ".cell" << i << ".txt";
+            std::string s = ss.str();
+            complexes[i].write_filtration_file(s.c_str(), use_ids);
+        }
 
-        /* MPI_Reduce(&mytime, &time, 1, MPI_DOUBLE, MPI_MAX, 0, comm); */
-        /* MPI_Reduce(&my_num_edges, &num_edges, 1, MPI_INDEX, MPI_SUM, 0, comm); */
+        mytime += MPI_Wtime();
 
-        /* if (!myrank) fprintf(stderr, "[time=%.3f] redistributed edges [points=%lld,edges=%lld,density=%.3f]\n", time, size, num_edges, (num_edges+0.0)/size); */
-        /* fflush(stderr); */
-    /* } */
+        if (verbosity >= 1)
+        {
+            MPI_Reduce(&mytime, &time, 1, MPI_DOUBLE, MPI_MAX, 0, comm);
+            if (!myrank) printf("[time=%.3f] wrote complex files\n", time);
+            fflush(stdout);
+        }
+    }
 
-    /* if (outfile) */
-    /* { */
-        /* MPI_Barrier(comm); */
-        /* mytime = -MPI_Wtime(); */
-        /* graph.write_file(outfile, comm); */
-        /* mytime += MPI_Wtime(); */
+    mytime = -MPI_Wtime();
 
-        /* if (verbosity >= 1) */
-        /* { */
-            /* MPI_Reduce(&mytime, &time, 1, MPI_DOUBLE, MPI_MAX, 0, comm); */
-            /* if (!myrank) fprintf(stderr, "[time=%.3f] wrote edges to file '%s'\n", time, outfile); */
-            /* fflush(stderr); */
-        /* } */
-    /* } */
 
-    /* MPI_Reduce(&mytottime, &tottime, 1, MPI_DOUBLE, MPI_MAX, 0, comm); */
-    /* MPI_Reduce(&mytotdistcomps, &totdistcomps, 1, MPI_INDEX, MPI_SUM, 0, comm); */
-    /* if (!myrank) fprintf(stderr, "[time=%.3f] complete [distcomps=%s,avg_distcomps=%s]\n", tottime, LARGE(totdistcomps), LARGE(static_cast<Index>((totdistcomps+0.0)/nprocs))); */
-    /* fflush(stderr); */
+    mytime += MPI_Wtime();
+    mytottime += MPI_Wtime();
+    mytotdistcomps = distance.distcomps;
+
+
+    MPI_Reduce(&mytottime, &tottime, 1, MPI_DOUBLE, MPI_MAX, 0, comm);
+    MPI_Reduce(&mytotdistcomps, &totdistcomps, 1, MPI_INDEX, MPI_SUM, 0, comm);
+    if (!myrank) fprintf(stderr, "[time=%.3f] complete [distcomps=%s,avg_distcomps=%s]\n", tottime, LARGE(totdistcomps), LARGE(static_cast<Index>((totdistcomps+0.0)/nprocs)));
+    fflush(stderr);
 
     return 0;
 }
@@ -263,6 +264,7 @@ void parse_cmdline(int argc, char *argv[])
             fprintf(stderr, "         -d INT   maximum dimension [%lld]\n", maxdim);
             fprintf(stderr, "         -o FILE  output edge file\n");
             fprintf(stderr, "         -s INT   random number seed\n");
+            fprintf(stderr, "         -V       print simplices\n");
             fprintf(stderr, "         -F       fix number of centers\n");
             fprintf(stderr, "         -h       help message\n");
         }
@@ -272,7 +274,7 @@ void parse_cmdline(int argc, char *argv[])
     };
 
     int c;
-    while ((c = getopt(argc, argv, "i:d:r:m:c:l:v:o:s:FD:h")) >= 0)
+    while ((c = getopt(argc, argv, "i:d:r:m:c:l:v:o:s:VFD:h")) >= 0)
     {
         if      (c == 'i') infile = optarg;
         else if (c == 'r') radius = atof(optarg);
@@ -284,6 +286,7 @@ void parse_cmdline(int argc, char *argv[])
         else if (c == 'o') outfile = optarg;
         else if (c == 'F') fix_num_centers = true;
         else if (c == 's') rng_seed = atoi(optarg);
+        else if (c == 'V') use_ids = false;
         else if (c == 'D') metric = optarg;
         else if (c == 'h') usage(0, myrank == 0);
     }

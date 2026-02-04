@@ -1,9 +1,9 @@
 
-Simplex::Simplex() : id(0) {}
+Simplex::Simplex() : id(0), interior(0) {}
 
-Simplex::Simplex(Index id) : id(id) {}
+Simplex::Simplex(Index id) : id(id), interior(0) {}
 
-Simplex::Simplex(const IndexVector& verts)
+Simplex::Simplex(const IndexVector& verts) : interior(0)
 {
     IndexVector vertices(verts);
     std::sort(vertices.begin(), vertices.end());
@@ -111,105 +111,117 @@ void Simplex::get_facet_ids(IndexVector& ids, Index n) const
     }
 }
 
-void RipsComplex::bron_kerbosch(IndexVector& current, const IndexVector& cands, Index excluded, const NeighborListVector& graph, NeighborListVector& weights, Index maxdim)
+void Simplex::reindex(const IndexVector& indices, Index n)
 {
-    if (!current.empty())
+    IndexVector verts = getverts(n);
+    for (Index& v : verts) v = indices[v];
+
+    std::sort(verts.begin(), verts.end());
+
+    uint64_t p = verts.size()-1;
+    uint64_t uid = 0;
+
+    for (Index i = p; i >= 0; --i)
     {
-        Index p = current.size()-1;
-        simplices.emplace_back(current);
-
-        const Simplex& sigma = simplices.back();
-
-        if (p == 0) weights[0].insert({sigma.getid(), 0.});
-        else if (p == 1) weights[1].insert({sigma.getid(), graph[current[0]].find(current[1])->second});
-        else weights[p].insert({sigma.getid(), 0.});
+        uid += binom(verts[i], i+1);
     }
 
-    if (current.size() == static_cast<size_t>(maxdim) + 1)
-        return;
-
-    Index m = cands.size();
-
-    for (Index j = excluded+1; j < m; ++j)
-    {
-        current.push_back(cands[j]);
-
-        IndexVector new_cands;
-
-        for (Index i = 0; i < j; ++i)
-        {
-            if (graph[cands[i]].find(cands[j]) != graph[cands[i]].end())
-                new_cands.push_back(cands[i]);
-
-            /* if (neighbor(cands[i], cands[j])) */
-                /* new_cands.push_back(cands[i]); */
-        }
-
-        Index ex = new_cands.size();
-
-        for (Index i = j+1; i < m; ++i)
-        {
-            if (graph[cands[i]].find(cands[j]) != graph[cands[i]].end())
-                new_cands.push_back(cands[i]);
-
-            /* if (neighbor(cands[i], cands[j])) */
-                /* new_cands.push_back(cands[i]); */
-        }
-
-        excluded = ex-1;
-
-        bron_kerbosch(current, new_cands, excluded, graph, weights, maxdim);
-        current.pop_back();
-    }
+    id = static_cast<Index>(uid | (p << 60));
 }
 
-RipsComplex::RipsComplex(const Graph& skeleton, Index maxdim) : num_vertices(skeleton.num_vertices())
-{
-    NeighborListVector graph(num_vertices);
-    Index num_edges = skeleton.my_num_edges();
+/* void RipsComplex::bron_kerbosch(IndexVector& current, const IndexVector& cands, Index excluded, const NeighborListVector& graph, NeighborListVector& weights, Index maxdim) */
+/* { */
+    /* if (!current.empty()) */
+    /* { */
+        /* Index p = current.size()-1; */
+        /* simplices.emplace_back(current); */
 
-    for (Index i = 0; i < num_edges; ++i)
-    {
-        const auto& [u, v, dist] = skeleton[i];
-        graph[u].insert({v, dist});
-    }
+        /* const Simplex& sigma = simplices.back(); */
 
-    NeighborListVector weights(maxdim+1);
+        /* if (p == 0) weights[0].insert({sigma.getid(), 0.}); */
+        /* else if (p == 1) weights[1].insert({sigma.getid(), graph[current[0]].find(current[1])->second}); */
+        /* else weights[p].insert({sigma.getid(), 0.}); */
+    /* } */
 
-    IndexVector current;
-    IndexVector candidates(num_vertices);
+    /* if (current.size() == static_cast<size_t>(maxdim) + 1) */
+        /* return; */
 
-    std::iota(candidates.begin(), candidates.end(), (Index)0);
+    /* Index m = cands.size(); */
 
-    bron_kerbosch(current, candidates, -1, graph, weights, maxdim);
+    /* for (Index j = excluded+1; j < m; ++j) */
+    /* { */
+        /* current.push_back(cands[j]); */
 
-    for (Index p = 2; p <= maxdim; ++p)
-    {
-        for (auto& [id, weight] : weights[p])
-        {
-            weight = 0;
-            Simplex sigma(id);
+        /* IndexVector new_cands; */
 
-            IndexVector facet_ids;
-            sigma.get_facet_ids(facet_ids, num_vertices);
+        /* for (Index i = 0; i < j; ++i) */
+        /* { */
+            /* if (graph[cands[i]].find(cands[j]) != graph[cands[i]].end()) */
+                /* new_cands.push_back(cands[i]); */
+        /* } */
 
-            for (Index fid : facet_ids)
-            {
-                weight = std::max(weight, weights[p-1][fid]);
-            }
-        }
-    }
+        /* Index ex = new_cands.size(); */
 
-    for (auto& s : simplices)
-    {
-        Index id = s.getid();
-        Index dim = s.getdim();
+        /* for (Index i = j+1; i < m; ++i) */
+        /* { */
+            /* if (graph[cands[i]].find(cands[j]) != graph[cands[i]].end()) */
+                /* new_cands.push_back(cands[i]); */
+        /* } */
 
-        s.value = weights[dim][id];
-    }
+        /* excluded = ex-1; */
 
-    std::sort(simplices.begin(), simplices.end());
-}
+        /* bron_kerbosch(current, new_cands, excluded, graph, weights, maxdim); */
+        /* current.pop_back(); */
+    /* } */
+/* } */
+
+/* RipsComplex::RipsComplex(const Graph& skeleton, Index maxdim) : num_vertices(skeleton.num_vertices()) */
+/* { */
+    /* NeighborListVector graph(num_vertices); */
+    /* Index num_edges = skeleton.my_num_edges(); */
+
+    /* for (Index i = 0; i < num_edges; ++i) */
+    /* { */
+        /* const auto& [u, v, dist] = skeleton[i]; */
+        /* graph[u].insert({v, dist}); */
+    /* } */
+
+    /* NeighborListVector weights(maxdim+1); */
+
+    /* IndexVector current; */
+    /* IndexVector candidates(num_vertices); */
+
+    /* std::iota(candidates.begin(), candidates.end(), (Index)0); */
+
+    /* bron_kerbosch(current, candidates, -1, graph, weights, maxdim); */
+
+    /* for (Index p = 2; p <= maxdim; ++p) */
+    /* { */
+        /* for (auto& [id, weight] : weights[p]) */
+        /* { */
+            /* weight = 0; */
+            /* Simplex sigma(id); */
+
+            /* IndexVector facet_ids; */
+            /* sigma.get_facet_ids(facet_ids, num_vertices); */
+
+            /* for (Index fid : facet_ids) */
+            /* { */
+                /* weight = std::max(weight, weights[p-1][fid]); */
+            /* } */
+        /* } */
+    /* } */
+
+    /* for (auto& s : simplices) */
+    /* { */
+        /* Index id = s.getid(); */
+        /* Index dim = s.getdim(); */
+
+        /* s.value = weights[dim][id]; */
+    /* } */
+
+    /* std::sort(simplices.begin(), simplices.end()); */
+/* } */
 
 std::string Simplex::repr(Index n) const
 {
