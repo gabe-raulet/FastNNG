@@ -21,23 +21,6 @@ class RipsFiltration
         std::vector<Simplex> simplices;
 };
 
-struct UidValue
-{
-    Real value;
-    Index dim;
-    Index id;
-
-    UidValue() {}
-
-    UidValue(const Simplex& s) : value(s.getvalue()), dim(s.getdim()), id(s.getid()) {}
-
-    friend std::ostream& operator<<(std::ostream& os, const UidValue& u)
-    {
-        os << "UidValue(value=" << u.value << ", dim=" << u.dim << ", uid=" << u.id << ")";
-        return os;
-    }
-};
-
 struct CoboundaryMatrix
 {
     CoboundaryMatrix(const RipsFiltration& filt);
@@ -55,7 +38,6 @@ struct CoboundaryMatrix
     std::vector<IndexVector> columns;
     IndexMap id_to_sorted_id;
     RealVector sorted_id_to_value;
-    std::vector<UidValue> col_values;
     std::vector<Simplex> simplices;
 };
 

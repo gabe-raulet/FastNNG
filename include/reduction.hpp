@@ -43,13 +43,11 @@ CoboundaryMatrix::CoboundaryMatrix(const RipsFiltration& filt) : simplices(filt.
 
     columns.resize(num_columns);
     sorted_id_to_value.resize(num_columns);
-    col_values.reserve(num_columns);
 
     for (Index i = 0; i < num_columns; ++i)
     {
         id_to_sorted_id.insert({simplices[i].getid(), i});
         sorted_id_to_value[i] = simplices[i].getvalue();
-        col_values.emplace_back(simplices[i]);
     }
 
     for (Index i = 0; i < num_columns; ++i)
@@ -70,7 +68,7 @@ CoboundaryMatrix::CoboundaryMatrix(const RipsFiltration& filt) : simplices(filt.
         }
     }
 
-    std::reverse(col_values.begin(), col_values.end());
+    std::reverse(simplices.begin(), simplices.end());
 
     for (auto& col : columns) std::reverse(col.begin(), col.end());
 }
@@ -137,17 +135,14 @@ void CoboundaryMatrix::print_persistence() const
 
         paired.insert(death_index);
 
-        UidValue birth_value = col_values[birth_index];
-        UidValue death_value = col_values[death_index];
+        Simplex birth_simplex = simplices[birth_index];
+        Simplex death_simplex = simplices[death_index];
 
-        Simplex birth_simplex = *std::find_if(simplices.begin(), simplices.end(), [&](const Simplex& x) { return x.id == birth_value.id; });
-        Simplex death_simplex = *std::find_if(simplices.begin(), simplices.end(), [&](const Simplex& x) { return x.id == death_value.id; });
-
-        if (birth_value.value != death_value.value)
+        if (birth_simplex.value != death_simplex.value)
         {
             std::string birth_string = birth_simplex.fullrepr(num_vertices);
             std::string death_string = death_simplex.fullrepr(num_vertices);
-            printf("(%.5f, %.5f), simplices %s <-> %s\n", birth_value.value, death_value.value, birth_string.c_str(), death_string.c_str());
+            printf("(%.5f, %.5f), simplices %s <-> %s\n", birth_simplex.value, death_simplex.value, birth_string.c_str(), death_string.c_str());
         }
     }
 
@@ -156,11 +151,10 @@ void CoboundaryMatrix::print_persistence() const
         if (columns[j].empty() && paired.count(j) == 0)
         {
             Index birth_index = j;
-            UidValue birth_value = col_values[birth_index];
-            Simplex birth_simplex = *std::find_if(simplices.begin(), simplices.end(), [&](const Simplex& x) { return x.id == birth_value.id; });
+            Simplex birth_simplex = simplices[birth_index];
             std::string birth_string = birth_simplex.fullrepr(num_vertices);
 
-            printf("(%.5f, inf), birth simplex %s\n", birth_value.value, birth_string.c_str());
+            printf("(%.5f, inf), birth simplex %s\n", birth_simplex.value, birth_string.c_str());
         }
     }
 }
