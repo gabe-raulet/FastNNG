@@ -1,0 +1,73 @@
+./landmark -i example.seqs -D edit -m 1 -r 40
+
+[time=0.069] read input file '/pscratch/sd/g/gabeh98/datasets/example.seqs' [size=10000,atoms=3.7M]
+[time=1.824] computed point partitioning [distcomps=40.0K,avg_distcomps=10.0K,centers=4]
+[time=0.003] coalesced cells
+[time=560.466] added ghost points [distcomps=6.4M,avg_distcomps=1.6M]
+[time=810.654] found neighbors [distcomps=12.7M,avg_distcomps=3.2M]
+[time=0.043] redistributed edges [points=10000,edges=343554,density=34.355]
+[time=1373.060] complete [distcomps=19.1M,avg_distcomps=4.8M]
+
+[time=0.071] read input file '/pscratch/sd/g/gabeh98/datasets/example.seqs' [size=10000,atoms=3.7M]
+[time=2.419] computed point partitioning [distcomps=80.0K,avg_distcomps=10.0K,centers=8]
+[time=0.003] coalesced cells
+[time=457.518] added ghost points [distcomps=7.6M,avg_distcomps=950.2K]
+[time=410.757] found neighbors [distcomps=9.9M,avg_distcomps=1.2M]
+[time=0.025] redistributed edges [points=10000,edges=343554,density=34.355]
+[time=870.793] complete [distcomps=17.5M,avg_distcomps=2.2M]
+
+[time=0.081] read input file '/pscratch/sd/g/gabeh98/datasets/example.seqs' [size=10000,atoms=3.7M]
+[time=2.874] computed point partitioning [distcomps=160.0K,avg_distcomps=10.0K,centers=16]
+[time=0.002] coalesced cells
+[time=255.829] added ghost points [distcomps=6.8M,avg_distcomps=426.7K]
+[time=162.580] found neighbors [distcomps=6.4M,avg_distcomps=397.8K]
+[time=0.019] redistributed edges [points=10000,edges=343554,density=34.355]
+[time=421.386] complete [distcomps=13.4M,avg_distcomps=834.5K]
+
+[time=0.085] read input file '/pscratch/sd/g/gabeh98/datasets/example.seqs' [size=10000,atoms=3.7M]
+[time=4.401] computed point partitioning [distcomps=320.0K,avg_distcomps=10.0K,centers=32]
+[time=0.002] coalesced cells
+[time=270.474] added ghost points [distcomps=8.5M,avg_distcomps=265.2K]
+[time=146.703] found neighbors [distcomps=3.8M,avg_distcomps=118.4K]
+[time=0.015] redistributed edges [points=10000,edges=343554,density=34.355]
+[time=421.681] complete [distcomps=12.6M,avg_distcomps=393.6K]
+
+[time=0.088] read input file '/pscratch/sd/g/gabeh98/datasets/example.seqs' [size=10000,atoms=3.7M]
+[time=4.319] computed point partitioning [distcomps=640.0K,avg_distcomps=10.0K,centers=64]
+[time=0.002] coalesced cells
+[time=134.975] added ghost points [distcomps=7.5M,avg_distcomps=117.3K]
+[time=48.493] found neighbors [distcomps=2.4M,avg_distcomps=37.5K]
+[time=0.009] redistributed edges [points=10000,edges=343554,density=34.355]
+[time=187.887] complete [distcomps=10.5M,avg_distcomps=164.7K]
+
+[time=0.103] read input file '/pscratch/sd/g/gabeh98/datasets/example.seqs' [size=10000,atoms=3.7M]
+[time=6.583] computed point partitioning [distcomps=1.3M,avg_distcomps=10.0K,centers=128]
+[time=0.003] coalesced cells
+[time=74.500] added ghost points [distcomps=7.4M,avg_distcomps=57.4K]
+[time=29.552] found neighbors [distcomps=1.7M,avg_distcomps=13.6K]
+[time=0.008] redistributed edges [points=10000,edges=343554,density=34.355]
+[time=110.753] complete [distcomps=10.4M,avg_distcomps=81.1K]
+
+[time=0.098] read input file '/pscratch/sd/g/gabeh98/datasets/example.seqs' [size=10000,atoms=3.7M]
+[time=6.690] computed point partitioning [distcomps=1.3M,avg_distcomps=10.0K,centers=128]
+[time=0.003] coalesced cells
+[time=66.667] added ghost points [distcomps=7.7M,avg_distcomps=60.1K]
+[time=14.456] found neighbors [distcomps=1.8M,avg_distcomps=14.1K]
+[time=0.007] redistributed edges [points=10000,edges=343554,density=34.355]
+[time=87.922] complete [distcomps=10.8M,avg_distcomps=84.2K]
+
+[time=0.044] read input file '/pscratch/sd/g/gabeh98/datasets/example.seqs' [size=10000,atoms=3.7M]
+[time=8.673] computed point partitioning [distcomps=2.6M,avg_distcomps=10.0K,centers=256]
+[time=0.008] coalesced cells
+[time=50.292] added ghost points [distcomps=7.9M,avg_distcomps=30.9K]
+[time=14.444] found neighbors [distcomps=1.2M,avg_distcomps=4.6K]
+[time=0.006] redistributed edges [points=10000,edges=343554,density=34.355]
+[time=73.467] complete [distcomps=11.6M,avg_distcomps=45.5K]
+
+[time=0.044] read input file '/pscratch/sd/g/gabeh98/datasets/example.seqs' [size=10000,atoms=3.7M]
+[time=9.007] computed point partitioning [distcomps=5.1M,avg_distcomps=10.0K,centers=512]
+[time=0.008] coalesced cells
+[time=27.427] added ghost points [distcomps=10.0M,avg_distcomps=19.6K]
+[time=6.506] found neighbors [distcomps=854.9K,avg_distcomps=1.7K]
+[time=0.007] redistributed edges [points=10000,edges=343554,density=34.355]
+[time=43.000] complete [distcomps=16.0M,avg_distcomps=31.3K]
