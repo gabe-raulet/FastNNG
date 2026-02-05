@@ -73,6 +73,13 @@ CoboundaryMatrix::CoboundaryMatrix(const RipsFiltration& filt) : simplices(filt.
     for (auto& col : columns) std::reverse(col.begin(), col.end());
 }
 
+std::string CoboundaryMatrix::get_simplex_repr(Index i) const
+{
+    std::stringstream ss;
+    ss << "Entry[" << simplices[i].fullrepr(num_vertices) << ", index=" << i << "]";
+    return ss.str();
+}
+
 void CoboundaryMatrix::reduce()
 {
     Index nrows = num_rows();

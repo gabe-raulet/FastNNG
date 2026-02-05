@@ -30,7 +30,7 @@ def neighbor_graph(points, epsilon):
                 graph[v].append(u)
     return graph
 
-circle = tadasets.dsphere(n=50, d=1, r=1, noise=0.1).astype(np.float32)
+circle = tadasets.dsphere(n=8, d=1, r=1, noise=0.0).astype(np.float32)
 graph = neighbor_graph(circle, 1)
 plot_points(circle, graph)
 plt.show()

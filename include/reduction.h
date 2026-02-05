@@ -39,6 +39,8 @@ struct CoboundaryMatrix
     IndexMap id_to_sorted_id;
     RealVector sorted_id_to_value;
     std::vector<Simplex> simplices;
+
+    std::string get_simplex_repr(Index i) const;
 };
 
 #include "reduction.hpp"
