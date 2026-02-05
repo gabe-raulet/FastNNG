@@ -39,27 +39,23 @@ int main_mpi(int argc, char *argv[])
 {
     double mytime, time;
 
-    RipsFiltration filtration;
-    filtration.read_file(infile);
+    RipsFiltration filt;
+    filt.read_file(infile);
 
-    for (const auto& s : filtration.simplices)
+    Index num_simplices = filt.size();
+    Index num_vertices = filt.num_vertices();
+
+    CoboundaryMatrix m(filt);
+
+    for (const auto& obj : m.col_values)
     {
-        std::cout << s.fullrepr(filtration.num_verts) << std::endl;
+        std::cout << obj << std::endl;
     }
 
-    /* Index num_simplices = filtration.size(); */
-    /* Index num_vertices = filtration.num_vertices(); */
-
-    /* BoundaryMatrix bd_matrix(filtration); */
-
-    /* bd_matrix.reduce(); */
-
-    /* if (outfile) */
-    /* { */
-        /* FILE *f = fopen(outfile, "w"); */
-        /* bd_matrix.write_homology_persistence(f); */
-        /* fclose(f); */
-    /* } */
+    for (Index i = 0; i < num_simplices; ++i)
+    {
+        std::cout << "column=" << i << ": " << CONTAINER_REPR(m.columns[i]) << std::endl;
+    }
 
     return 0;
 }
