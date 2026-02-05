@@ -42,9 +42,12 @@ struct CoboundaryMatrix
 {
     CoboundaryMatrix(const RipsFiltration& filt);
 
-    IndexVector pivots;
-    std::vector<IndexVector> columns;
+    void reduce();
 
+    Index num_rows() const { return columns.size(); }
+    Index num_cols() const { return num_rows(); }
+
+    std::vector<IndexVector> columns;
     IndexMap id_to_sorted_id;
     RealVector sorted_id_to_value;
     std::vector<UidValue> col_values;

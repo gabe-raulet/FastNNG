@@ -76,6 +76,52 @@ CoboundaryMatrix::CoboundaryMatrix(const RipsFiltration& filt) : simplices(filt.
     for (auto& col : columns) std::reverse(col.begin(), col.end());
 }
 
+void CoboundaryMatrix::reduce()
+{
+    Index nrows = num_rows();
+    Index ncols = num_cols();
+
+    IndexVector pivots(nrows, -1);
+    std::set<Index> addition_cache;
+
+    for (Index j = 0; j < ncols; ++j)
+    {
+        IndexVector& reduced_col = columns[j];
+
+        addition_cache.clear();
+        addition_cache.insert(reduced_col.cbegin(), reduced_col.cend());
+
+        while (!addition_cache.empty())
+        {
+            Index& pivot = pivots[*addition_cache.rbegin()];
+
+            if (pivot == -1)
+            {
+                pivot = j;
+                reduced_col.assign(addition_cache.begin(), addition_cache.end());
+                break;
+            }
+            else
+            {
+                for (Index i : columns[pivot])
+                {
+                    auto insertion_result = addition_cache.insert(i);
+
+                    if (!insertion_result.second)
+                    {
+                        addition_cache.erase(insertion_result.first);
+                    }
+                }
+            }
+        }
+
+        if (addition_cache.empty())
+        {
+            reduced_col.clear();
+        }
+    }
+}
+
 /* BoundaryMatrix::BoundaryMatrix(const RipsFiltration& filt) : */
     /* pivots(filt.size(), -1), */
     /* columns(filt.size()), */
