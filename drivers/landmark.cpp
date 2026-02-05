@@ -146,6 +146,7 @@ int main_mpi(int argc, char *argv[])
         fflush(stdout);
     }
 
+    MPI_Barrier(comm);
     mytime = -MPI_Wtime();
 
     std::vector<VoronoiCellType> mycells;
