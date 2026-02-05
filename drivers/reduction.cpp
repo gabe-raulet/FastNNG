@@ -42,19 +42,24 @@ int main_mpi(int argc, char *argv[])
     RipsFiltration filtration;
     filtration.read_file(infile);
 
-    Index num_simplices = filtration.size();
-    Index num_vertices = filtration.num_vertices();
-
-    BoundaryMatrix bd_matrix(filtration);
-
-    bd_matrix.reduce();
-
-    if (outfile)
+    for (const auto& s : filtration.simplices)
     {
-        FILE *f = fopen(outfile, "w");
-        bd_matrix.write_homology_persistence(f);
-        fclose(f);
+        std::cout << s.fullrepr(filtration.num_verts) << std::endl;
     }
+
+    /* Index num_simplices = filtration.size(); */
+    /* Index num_vertices = filtration.num_vertices(); */
+
+    /* BoundaryMatrix bd_matrix(filtration); */
+
+    /* bd_matrix.reduce(); */
+
+    /* if (outfile) */
+    /* { */
+        /* FILE *f = fopen(outfile, "w"); */
+        /* bd_matrix.write_homology_persistence(f); */
+        /* fclose(f); */
+    /* } */
 
     return 0;
 }

@@ -33,6 +33,8 @@ void RipsFiltration::read_file(const char *fname)
     is.close();
 
     num_verts = n;
+
+    std::sort(simplices.begin(), simplices.end());
 }
 
 BoundaryMatrix::BoundaryMatrix(const RipsFiltration& filt) :

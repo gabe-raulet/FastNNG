@@ -32,6 +32,7 @@ struct Simplex
     friend bool operator!=(const Simplex& lhs, const Simplex& rhs);
 
     std::string repr(Index n) const;
+    std::string fullrepr(Index n) const;
 
     void reindex(const IndexVector& indices, Index n);
 };

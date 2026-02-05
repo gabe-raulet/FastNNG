@@ -17,8 +17,6 @@ class RipsFiltration
         Index num_vertices() const { return num_verts; }
         Simplex operator[](Index i) const { return simplices[i]; }
 
-    private:
-
         Index num_verts;
         std::vector<Simplex> simplices;
 };

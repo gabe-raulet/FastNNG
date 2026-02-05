@@ -124,7 +124,16 @@ void Simplex::get_facet_ids(IndexVector& ids, Index n) const
 
 inline bool operator<(const Simplex& lhs, const Simplex& rhs)
 {
-    return (std::tie(lhs.value, lhs.id) < std::tie(rhs.value, rhs.id));
+    Index ldim = lhs.getdim();
+    Index rdim = rhs.getdim();
+
+    if (ldim > rdim) return true;
+
+    if (ldim == rdim && lhs.value < rhs.value) return true;
+
+    if (ldim == rdim && lhs.value == rhs.value && lhs.id < rhs.id) return true;
+
+    return false;
 }
 
 inline bool operator==(const Simplex& lhs, const Simplex& rhs)
@@ -151,6 +160,14 @@ std::string Simplex::repr(Index n) const
     }
 
     ss << verts[size-1] << ">";
+    return ss.str();
+}
+
+std::string Simplex::fullrepr(Index n) const
+{
+    std::stringstream ss;
+
+    ss << "simplex[" << this->repr(n) << ", " << value << "]";
     return ss.str();
 }
 
