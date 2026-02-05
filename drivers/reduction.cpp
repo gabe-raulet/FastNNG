@@ -42,27 +42,9 @@ int main_mpi(int argc, char *argv[])
     RipsFiltration filt;
     filt.read_file(infile);
 
-    Index num_simplices = filt.size();
-    Index num_vertices = filt.num_vertices();
-
     CoboundaryMatrix m(filt);
-
-    /* for (const auto& obj : m.col_values) */
-    /* { */
-        /* std::cout << obj << std::endl; */
-    /* } */
-
-    for (Index i = 0; i < num_simplices; ++i)
-    {
-        std::cout << "column=" << i << ": " << CONTAINER_REPR(m.columns[i]) << std::endl;
-    }
-
     m.reduce();
-
-    for (Index i = 0; i < num_simplices; ++i)
-    {
-        std::cout << "column=" << i << ": " << CONTAINER_REPR(m.columns[i]) << std::endl;
-    }
+    m.print_persistence();
 
     return 0;
 }
